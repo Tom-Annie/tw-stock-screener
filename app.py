@@ -201,18 +201,15 @@ elif not _sl_cached.empty and "industry" in _sl_cached.columns:
 elif not _sl_cached.empty:
     _est_stock_count = len(_sl_cached)
 
-_is_quick_est = "快速" in scan_mode
-# Phase B 永遠上限 200；快速模式 ≤200 直接全部進 Phase B
-_est_phase_b = min(_est_stock_count, 200)
-# 價量下載：快速 ≤200 時只下載篩選後數量，否則下載全部（yfinance 為主，~10% fallback 到 FinMind）
-_est_price_targets = min(_est_stock_count, 200) if _is_quick_est else _est_stock_count
-_est_price_fallback = max(int(_est_price_targets * 0.1), 5)
+# 超過 200 檔會用成交量篩到 200，所以實際下載/分析上限 200
+_est_actual = min(_est_stock_count, 200)
+_est_price_fallback = max(int(_est_actual * 0.1), 5)  # ~10% yfinance miss → FinMind fallback
 _est_fixed = 5  # stock list + TAIEX + SOX + TSM + night futures
-_est_institutional = _est_phase_b
-_est_margin = _est_phase_b
-_est_tdcc = _est_phase_b  # TDCC 集保：每檔 1 call
-# 快速模式 >200 時額外 +1 for 成交量排名查詢
-_est_vol_query = 1 if (_is_quick_est and _est_stock_count > 200) else 0
+_est_vol_query = 1 if _est_stock_count > 200 else 0  # 成交量排名查詢
+_est_institutional = _est_actual
+_est_margin = _est_actual
+_est_tdcc = _est_actual  # TDCC 集保：每檔 1 call
+_est_phase_b = _est_actual
 _est_total = _est_fixed + _est_vol_query + _est_price_fallback + _est_institutional + _est_margin + _est_tdcc
 
 _quota_remaining = None
@@ -277,16 +274,15 @@ if run_btn:
             st.stop()
         status_text.info(f"已篩選 {', '.join(selected_industries)}，共 {len(stock_list)} 檔")
 
-    # 快速模式: 先抓最近一天全市場成交量，取 TOP 200
+    # 超過 200 檔時，用成交量篩選 TOP 200（節省 API 額度）
     target_stocks = stock_list["stock_id"].tolist()
-    if is_quick and len(target_stocks) > 200:
-        status_text.info("快速模式：篩選成交量前 200 大...")
+    if len(target_stocks) > 200:
+        status_text.info(f"共 {len(target_stocks)} 檔，篩選成交量前 200 大...")
         try:
             recent_date = (end_date - timedelta(days=5)).strftime("%Y-%m-%d")
             recent_prices = fetch_stock_prices(start_date=recent_date,
                                                end_date=end_date_str)
             if not recent_prices.empty:
-                # 取每檔最後一天的成交量
                 latest = recent_prices.sort_values("date").groupby("stock_id").tail(1)
                 latest = latest[latest["stock_id"].isin(target_stocks)]
                 top_vol = latest.nlargest(200, "volume")["stock_id"].tolist()
@@ -296,8 +292,6 @@ if run_btn:
 
         if len(target_stocks) > 200:
             target_stocks = target_stocks[:200]
-    elif is_quick:
-        status_text.info(f"快速模式：產業篩選後僅 {len(target_stocks)} 檔，直接分析")
 
     total_stocks = len(target_stocks)
     status_text.info(f"將分析 {total_stocks} 檔股票")
