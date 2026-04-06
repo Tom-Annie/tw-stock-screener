@@ -255,6 +255,26 @@ if run_btn:
 
     progress = st.progress(0, text="載入股票清單...")
     status_text = st.empty()
+    token_display = st.empty()
+
+    # 即時 token 用量追蹤
+    _usage_start = check_finmind_usage()
+    _usage_start_used = _usage_start["used"] if _usage_start else 0
+    _usage_start_limit = _usage_start["limit"] if _usage_start else 600
+
+    def _update_token_display(step_label: str = ""):
+        """查詢並顯示目前 API 已用量"""
+        _now = check_finmind_usage()
+        if _now:
+            _consumed = _now["used"] - _usage_start_used
+            _remain = max(_now["limit"] - _now["used"], 0)
+            _pct = _now["used"] / max(_now["limit"], 1)
+            _color = "🟢" if _pct < 0.6 else ("🟡" if _pct < 0.85 else "🔴")
+            token_display.caption(
+                f"{_color} API：本次已用 **{_consumed}** 次"
+                f" | 剩餘 **{_remain}**/{_now['limit']}"
+                f"{f' — {step_label}' if step_label else ''}"
+            )
 
     # Step 1: 取得股票清單
     try:
@@ -311,6 +331,7 @@ if run_btn:
             st.error("無法取得價量資料，請稍後再試或檢查 API Token")
             st.stop()
         status_text.info(f"已下載 {all_prices['stock_id'].nunique()} 檔股票資料")
+        _update_token_display("價量資料完成")
     except Exception as e:
         st.error(f"取得價量資料失敗: {e}")
         st.stop()
@@ -357,6 +378,7 @@ if run_btn:
                 taiex_close = taiex_df["price"]
     except Exception:
         pass
+    _update_token_display("美股/大盤完成")
 
     # Step 4: 初始化策略
     ma_strategy = MABreakoutStrategy()
@@ -471,6 +493,7 @@ if run_btn:
         )
     except Exception as e:
         st.warning(f"法人籌碼資料取得失敗: {e}，該策略將以0分計算")
+    _update_token_display("法人資料完成")
 
     progress.progress(78, text="下載融資融券資料...")
     all_margin = pd.DataFrame()
@@ -485,6 +508,7 @@ if run_btn:
         )
     except Exception as e:
         st.warning(f"融資融券資料取得失敗: {e}，該策略將以0分計算")
+    _update_token_display("融資融券完成")
 
     progress.progress(83, text="計算完整策略分數...")
 
@@ -499,6 +523,8 @@ if run_btn:
             pct = 83 + int((idx / max(total, 1)) * 12)
             progress.progress(min(pct, 95),
                               text=f"完整分析... ({idx}/{total}) {sid}")
+        if idx % 50 == 0 and idx > 0:
+            _update_token_display(f"策略計算 {idx}/{total}")
 
         price_df = all_prices[all_prices["stock_id"] == sid].copy()
         if len(price_df) < 60:
@@ -632,19 +658,8 @@ if run_btn:
 
     progress.progress(100, text="完成!")
 
-    # 顯示實際 API 消耗（usage 在頁面載入時取得，可能為 None）
-    _usage_before = usage  # 分析前快照
-    _usage_after = check_finmind_usage()
-    if _usage_after and _usage_before:
-        _actual_used = _usage_after["used"] - _usage_before["used"]
-        _remaining_after = max(_usage_after["limit"] - _usage_after["used"], 0)
-        st.success(
-            f"分析完成！本次消耗 **{_actual_used}** 次 API 呼叫"
-            f"（剩餘 {_remaining_after}/{_usage_after['limit']}）"
-        )
-    elif _usage_after:
-        _remaining_after = max(_usage_after["limit"] - _usage_after["used"], 0)
-        st.success(f"分析完成！API 剩餘 {_remaining_after}/{_usage_after['limit']}")
+    # 最終 token 用量
+    _update_token_display("分析完成 ✅")
 
     if ranked.empty:
         st.warning("沒有符合條件的股票")
