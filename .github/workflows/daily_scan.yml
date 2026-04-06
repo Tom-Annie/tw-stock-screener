@@ -1,0 +1,31 @@
+name: Daily Market Scan
+
+on:
+  schedule:
+    # 台股收盤後 14:30 (UTC+8) = UTC 06:30
+    - cron: '30 6 * * 1-5'
+  workflow_dispatch:  # 允許手動觸發
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -q pandas requests yfinance pyarrow
+
+      - name: Run daily scan
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python scripts/daily_scan.py
