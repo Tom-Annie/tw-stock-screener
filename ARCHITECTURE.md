@@ -35,6 +35,7 @@ tw-stock-screener/
 │   ├── line_notify.py              # LINE Notify（備用）
 │   ├── auth.py                     # 使用者驗證
 │   ├── gist_store.py               # GitHub Gist 庫存持久化
+│   ├── theme.py                    # 科技風格 UI 主題（自訂 CSS 注入）
 │   └── __init__.py
 │
 ├── config/

@@ -5,6 +5,8 @@
 import streamlit as st
 
 st.set_page_config(page_title="策略教學", page_icon="📖", layout="wide")
+from utils.theme import inject_custom_css
+inject_custom_css()
 from utils.auth import require_auth
 require_auth()
 st.title("📖 八大選股策略教學")

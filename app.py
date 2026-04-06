@@ -12,6 +12,10 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# ===== 科技風格 CSS =====
+from utils.theme import inject_custom_css
+inject_custom_css()
+
 # ===== 密碼保護 =====
 from utils.auth import require_auth
 require_auth()
