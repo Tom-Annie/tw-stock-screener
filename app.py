@@ -77,8 +77,9 @@ else:
     _raw = [_auto_profile[k] for k in _WEIGHT_KEYS]
     st.sidebar.caption(f"目前溫度：**{_prev_temp}**")
     # 顯示自動權重（唯讀）
-    _weight_text = " | ".join(f"{l}:{v}" for l, v in zip(_WEIGHT_LABELS, _raw))
-    st.sidebar.caption(_weight_text)
+    with st.sidebar.expander("⚖️ 目前權重", expanded=False):
+        for l, v in zip(_WEIGHT_LABELS, _raw):
+            st.caption(f"**{l}**: {v}")
 
 total_w = sum(_raw)
 weights = {k: v / max(total_w, 1) for k, v in zip(_WEIGHT_KEYS, _raw)}
