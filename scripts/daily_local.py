@@ -8,8 +8,10 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-# 加入專案根目錄到 path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+# 切換到專案根目錄（排程器不一定會設 working directory）
+_project_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+os.chdir(_project_root)
+sys.path.insert(0, _project_root)
 
 # 嘗試從 .streamlit/secrets.toml 讀取 token
 _secrets_path = Path(__file__).parent.parent / ".streamlit" / "secrets.toml"

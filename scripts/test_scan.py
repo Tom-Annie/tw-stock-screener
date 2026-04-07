@@ -9,7 +9,9 @@ import time
 import traceback
 from datetime import datetime, timedelta
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+_project_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+os.chdir(_project_root)
+sys.path.insert(0, _project_root)
 
 # 讀 secrets
 _secrets_path = os.path.join(os.path.dirname(__file__), "..", ".streamlit", "secrets.toml")
