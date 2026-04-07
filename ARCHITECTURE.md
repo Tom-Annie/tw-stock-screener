@@ -47,7 +47,8 @@ tw-stock-screener/
 │
 ├── scripts/
 │   ├── daily_scan.py               # 每日排程掃描 + TG 推播 TOP 10（GitHub Actions）
-│   ├── daily_local.py              # 每日本地分析 50 檔熱門科技股 + 存歷史
+│   ├── daily_local.py              # 每日本地分析 50 檔熱門科技股 + 存歷史 + TG 推播
+│   ├── tg_bot.py                   # TG Bot 互動（/scan /stock /top /status）
 │   └── test_scan.py                # 掃描流程整合測試（8 項：yfinance/策略/排名）
 │
 ├── .github/workflows/
