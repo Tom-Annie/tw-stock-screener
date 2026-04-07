@@ -146,24 +146,44 @@ def _parse_yf_single(data, ticker: str, stock_id: str) -> pd.DataFrame:
     # reset index 把 Date 從 index 拉出來
     df = df.reset_index()
 
-    # 統一欄位名（不區分大小寫）
-    col_map = {}
+    # 展平 tuple 欄位名（單檔 yfinance 有時回傳 ("Close", "") 格式）
+    new_cols = []
     for c in df.columns:
-        cl = str(c).lower().strip()
-        if cl == "date":
+        if isinstance(c, tuple):
+            # 取 tuple 中第一個非空字串
+            name = next((str(x) for x in c if x and str(x).strip()), str(c))
+            new_cols.append(name)
+        else:
+            new_cols.append(str(c))
+    df.columns = new_cols
+
+    # 統一欄位名（不區分大小寫），每個目標名只取第一個匹配
+    col_map = {}
+    _mapped_targets = set()
+    for c in df.columns:
+        cl = c.lower().strip()
+        if cl == "date" and "date" not in _mapped_targets:
             col_map[c] = "date"
-        elif cl == "open":
+            _mapped_targets.add("date")
+        elif cl == "open" and "open" not in _mapped_targets:
             col_map[c] = "open"
-        elif cl == "high":
+            _mapped_targets.add("open")
+        elif cl == "high" and "high" not in _mapped_targets:
             col_map[c] = "high"
-        elif cl == "low":
+            _mapped_targets.add("high")
+        elif cl == "low" and "low" not in _mapped_targets:
             col_map[c] = "low"
-        elif cl in ("close", "adj close", "adjclose"):
-            if "close" not in col_map.values():
-                col_map[c] = "close"
-        elif cl == "volume":
+            _mapped_targets.add("low")
+        elif cl in ("close", "adj close", "adjclose") and "close" not in _mapped_targets:
+            col_map[c] = "close"
+            _mapped_targets.add("close")
+        elif cl == "volume" and "volume" not in _mapped_targets:
             col_map[c] = "volume"
+            _mapped_targets.add("volume")
     df = df.rename(columns=col_map)
+
+    # 去除重名欄位（保留第一個）
+    df = df.loc[:, ~df.columns.duplicated()]
 
     if "close" not in df.columns or "date" not in df.columns:
         return pd.DataFrame()
@@ -173,7 +193,11 @@ def _parse_yf_single(data, ticker: str, stock_id: str) -> pd.DataFrame:
         return pd.DataFrame()
 
     df["stock_id"] = stock_id
-    df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
+    # 確保 df["date"] 是 Series
+    date_col = df["date"]
+    if isinstance(date_col, pd.DataFrame):
+        date_col = date_col.iloc[:, 0]
+    df["date"] = pd.to_datetime(date_col).dt.strftime("%Y-%m-%d")
 
     keep = ["date", "stock_id", "open", "high", "low", "close", "volume"]
     available = [c for c in keep if c in df.columns]
