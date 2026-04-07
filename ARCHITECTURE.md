@@ -1,28 +1,31 @@
 # 專案架構
 
+## 目錄結構
+
 ```
 tw-stock-screener/
 │
 ├── app.py                          # 主頁：市場掃描、排名、市場溫度、自動權重
 │
 ├── pages/
-│   ├── 1_個股分析.py                # 單一個股 8 策略詳細分析 + 圖表
-│   ├── 2_我的庫存.py                # 庫存管理、損益追蹤、TG 推播提醒
-│   ├── 3_回測驗證.py                # 歷史回測策略績效驗證
+│   ├── 1_個股分析.py                # 單一個股 8 策略詳細分析 + K線/RSI/MACD 圖表
+│   ├── 2_我的庫存.py                # 庫存管理、損益追蹤、TG/LINE 推播提醒
+│   ├── 3_回測驗證.py                # 歷史回測策略績效驗證、勝率統計
 │   ├── 4_策略設定.py                # 策略權重、RSI 參數、法人權重調整
 │   └── 5_策略教學.py                # 8 大策略說明文件
 │
 ├── strategies/                     # 八大評分策略
-│   ├── base.py                     # BaseStrategy 基類 (_clamp 0~100)
-│   ├── scorer.py                   # compute_composite_score 加權總分
-│   ├── ma_breakout.py              # 策略1：均線突破
-│   ├── volume_price.py             # 策略2：量價齊揚
-│   ├── relative_strength.py        # 策略3：相對強弱（個股 vs 大盤）
-│   ├── institutional_flow.py       # 策略4：法人買賣超（投信/外資/自營商）
-│   ├── enhanced_technical.py       # 策略5：進階技術指標（KD/MACD/布林/OBV）
-│   ├── margin_analysis.py          # 策略6：融資融券分析
-│   ├── us_market.py                # 策略7：美股連動（費半/TSM/夜盤/期貨）
-│   └── shareholder.py              # 策略8：大戶籌碼集中度（集保股權分散表）
+│   ├── base.py                     # BaseStrategy 抽象基類（score/details/_clamp）
+│   ├── scorer.py                   # compute_composite_score 加權 + rank_stocks 排名
+│   ├── ma_breakout.py              # 策略1：均線突破（MA5/10/20/60 突破+多頭排列）
+│   ├── volume_price.py             # 策略2：量價齊揚（量比+連續天數+量能趨勢）
+│   ├── relative_strength.py        # 策略3：相對強弱（RSI + 個股 vs 大盤超額報酬）
+│   ├── institutional_flow.py       # 策略4：法人買賣超（投信/外資/自營商同步性）
+│   ├── enhanced_technical.py       # 策略5：進階技術（KD/MACD/布林/OBV/乖離率）
+│   ├── margin_analysis.py          # 策略6：融資融券（融資減+融券增=軋空訊號）
+│   ├── us_market.py                # 策略7：美股連動（費半/TSM ADR/夜盤/匯率）
+│   ├── shareholder.py              # 策略8：大戶籌碼（集保股權分散表集中度）
+│   └── __init__.py
 │
 ├── data/
 │   ├── fetcher.py                  # 資料層：Parquet 快取 → yfinance → FinMind API
@@ -32,27 +35,29 @@ tw-stock-screener/
 │   ├── indicators.py               # 技術指標（MA/EMA/RSI/MACD/KD/布林/OBV/ATR/MDD）
 │   ├── formatters.py               # 格式化工具（評級、顏色、數字）
 │   ├── telegram_notify.py          # Telegram 推播（庫存提醒）
-│   ├── line_notify.py              # LINE Notify（備用）
-│   ├── auth.py                     # 使用者驗證
+│   ├── line_notify.py              # LINE Notify（備用推播）
+│   ├── auth.py                     # 密碼保護（APP_PASSWORD / APP_PASSWORDS）
 │   ├── gist_store.py               # GitHub Gist 庫存持久化
 │   ├── theme.py                    # 科技風格 UI 主題（自訂 CSS 注入）
 │   └── __init__.py
 │
 ├── config/
-│   ├── settings.py                 # 全域設定（權重、參數、閾值）
+│   ├── settings.py                 # 全域設定（權重、參數、閾值、FINMIND_TOKEN）
 │   └── __init__.py
 │
 ├── scripts/
 │   └── daily_scan.py               # 每日排程掃描 + TG 推播 TOP 10
 │
 ├── .github/workflows/
-│   └── daily_scan.yml              # GitHub Actions 排程（每日自動執行）
+│   └── daily_scan.yml              # GitHub Actions 排程（平日 UTC 06:30）
 │
 ├── .streamlit/
-│   ├── config.toml                 # Streamlit 主題設定
-│   └── secrets.toml                # API keys（本地開發用）
+│   ├── config.toml                 # Streamlit 主題（深色底 #0a0f1a、主色 #00D2FF）
+│   └── secrets.toml                # API keys（本地開發用，已 .gitignore）
 │
-└── requirements.txt                # Python 套件依賴
+├── ARCHITECTURE.md                 # 本文件
+├── requirements.txt                # Python 套件依賴
+└── .gitignore                      # 忽略 __pycache__、secrets.toml、*.parquet、.env
 ```
 
 ## 資料流程
@@ -61,9 +66,10 @@ tw-stock-screener/
 使用者操作 Streamlit UI
         │
         ▼
-   data/fetcher.py ──→ ① Parquet 快取（免費）
-        │                ② yfinance 批次下載（免費）
+   data/fetcher.py ──→ ① Parquet 快取（免費、TTL 12~24hr）
+        │                ② yfinance 批次下載（免費、無限）
         │                ③ FinMind API（600次/hr）
+        │                ④ TWSE/TPEx 備援（免費、無 token）
         ▼
    strategies/*.py ──→ 8 策略各自評分 0~100
         │
@@ -74,26 +80,145 @@ tw-stock-screener/
    排名顯示 / TG 推播 / 庫存提醒
 ```
 
+## 三階段價量抓取
+
+```
+Phase 1: Parquet 快取命中 → 零成本
+Phase 2: yfinance 批次下載 .TW/.TWO → 免費無限（主力）
+Phase 3: FinMind 逐檔補齊 → 消耗 API 額度（備援）
+```
+
+## 兩階段市場掃描（>200 檔時）
+
+```
+Phase A: 價量策略初篩全部股票（免費）→ 取 TOP 200
+Phase B: 完整 8 策略（法人/融資/集保）→ 消耗 API 額度
+```
+
 ## 八大策略
 
-| # | 策略 | 檔案 | 說明 |
-|---|------|------|------|
-| 1 | 均線突破 | `ma_breakout.py` | 股價站上多條均線、均線多頭排列 |
-| 2 | 量價齊揚 | `volume_price.py` | 價漲量增共振、連續量價齊揚天數 |
-| 3 | 相對強弱 | `relative_strength.py` | 個股 vs 大盤超額報酬 + RSI |
-| 4 | 法人買賣超 | `institutional_flow.py` | 投信/外資/自營商買賣超同步性 |
-| 5 | 進階技術 | `enhanced_technical.py` | KD/MACD/布林通道/OBV/乖離率 |
-| 6 | 融資融券 | `margin_analysis.py` | 融資減+融券增=軋空訊號 |
-| 7 | 美股連動 | `us_market.py` | 費半/TSM ADR/夜盤期貨/台幣匯率 |
-| 8 | 大戶籌碼 | `shareholder.py` | 集保股權分散表、大戶持股集中度 |
+| # | 策略 | 檔案 | 核心邏輯 |
+|---|------|------|----------|
+| 1 | 均線突破 | `ma_breakout.py` | 股價站上 MA5/10/20/60 + 均線多頭排列 |
+| 2 | 量價齊揚 | `volume_price.py` | 價漲量增共振 + 量比 + 連續天數 |
+| 3 | 相對強弱 | `relative_strength.py` | RSI 動能 + 個股 vs 大盤超額報酬 |
+| 4 | 法人買賣超 | `institutional_flow.py` | 投信/外資/自營商同步買超 + 連續天數 |
+| 5 | 進階技術 | `enhanced_technical.py` | KD 黃金交叉 + MACD + 布林 + OBV + 乖離率 |
+| 6 | 融資融券 | `margin_analysis.py` | 融資減少(籌碼沉澱) + 融券增加(軋空) |
+| 7 | 美股連動 | `us_market.py` | 費半趨勢 + TSM ADR 折溢價 + 夜盤期貨 + 匯率 |
+| 8 | 大戶籌碼 | `shareholder.py` | 集保 400 張以上持股集中度變化 |
 
-## 外部服務
+## 外部 API 呼叫
 
-| 服務 | 用途 | 設定位置 |
-|------|------|----------|
-| FinMind API | 台股價量/法人/融資/集保資料 | `FINMIND_TOKEN` |
-| yfinance | 台股價量備援 + 美股資料 | 免費，無需 token |
-| Telegram Bot | 每日掃描推播 + 庫存提醒 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` |
-| GitHub Gist | 庫存資料持久化 | `GITHUB_TOKEN` |
-| GitHub Actions | 每日排程執行 `daily_scan.py` | Repository Secrets |
-| Streamlit Cloud | 網頁部署 | `.streamlit/secrets.toml` |
+### FinMind（主要資料源）
+| 函數 | Dataset | 用途 |
+|------|---------|------|
+| `check_finmind_usage()` | `/v2/user_info` | 查詢 API 剩餘額度 |
+| `fetch_stock_prices()` | `TaiwanStockPrice` | 台股日K |
+| `fetch_taiex()` | `TaiwanVariousIndicators5Seconds` | 加權指數 |
+| `fetch_institutional_investors()` | `TaiwanStockInstitutionalInvestorsBuySell` | 三大法人 |
+| `fetch_tdcc_holders()` | `TaiwanStockHoldingSharesPer` | 集保股權分散表 |
+| `fetch_night_futures()` | `TaiwanFuturesDaily` (after_market) | 夜盤期貨 |
+| `fetch_day_futures()` | `TaiwanFuturesDaily` (position) | 日盤期貨 |
+| `fetch_margin_data()` | `TaiwanStockMarginPurchaseShortSale` | 融資融券 |
+| `fetch_stock_list()` | `TaiwanStockInfo` | 股票清單 |
+
+### yfinance（免費備援）
+| 函數 | 標的 | 用途 |
+|------|------|------|
+| `_fetch_prices_yfinance_batch()` | `.TW` / `.TWO` | 台股價量（主力來源） |
+| `_fetch_us_yfinance()` | `TSM`, `^SOX` | 美股資料 |
+| `_fetch_taiex_yfinance()` | `^TWII` | 加權指數備援 |
+| `_get_usd_twd()` | `TWD=X` | USD/TWD 匯率 |
+
+### Telegram Bot API
+| 檔案 | 函數 | 用途 |
+|------|------|------|
+| `utils/telegram_notify.py` | `send()` | 庫存提醒（讀 Streamlit secrets） |
+| `scripts/daily_scan.py` | `send_telegram()` | 每日 TOP 10 推播（讀環境變數） |
+
+### GitHub Gist API
+| 函數 | 用途 |
+|------|------|
+| `gist_store.load()` | 讀取庫存 JSON |
+| `gist_store.save()` | 儲存庫存 JSON |
+
+### TWSE / TPEx（備援，免費無 token）
+| 函數 | 用途 |
+|------|------|
+| `fetch_twse_daily()` | 個股月K |
+| `_fetch_institutional_twse()` | 三大法人 |
+| `_fetch_margin_twse()` | 融資融券 |
+| `_fetch_stock_list_twse()` | 股票清單 |
+| `fetch_tpex_daily()` | 上櫃月K |
+
+## 關鍵函數索引
+
+### data/fetcher.py
+| 函數 | 說明 |
+|------|------|
+| `_fetch_finmind(dataset, params)` | 所有 FinMind API 呼叫的核心 |
+| `fetch_with_cache(dataset, params, ttl_hours)` | Parquet 快取包裝層 |
+| `_parse_yf_single(data, ticker, stock_id)` | 解析 yfinance MultiIndex（支援新舊版） |
+| `_normalize_price_df(df)` | 統一價量 DataFrame 欄位格式 |
+| `fetch_stock_prices_batch(stock_ids, ...)` | 三階段批次抓取 |
+
+### utils/indicators.py
+| 函數 | 說明 |
+|------|------|
+| `moving_average(series, period)` | 簡單移動平均 |
+| `exponential_moving_average(series, period)` | 指數移動平均 |
+| `rsi(series, period)` | 相對強弱指標 |
+| `macd(series, fast, slow, signal)` | MACD + Signal + Histogram |
+| `stochastic_kd(high, low, close, k, d)` | KD 隨機指標 |
+| `bollinger_bands(series, period, std)` | 布林通道 |
+| `obv(close, volume)` | 能量潮 |
+| `atr(high, low, close, period)` | 平均真實波幅 |
+| `volatility_risk(high, low, close)` | ATR% 風險等級 |
+| `max_drawdown(close)` | 最大回撤 |
+
+## 環境設定
+
+### Streamlit Cloud（網頁部署）
+```toml
+# .streamlit/secrets.toml（在 Streamlit Cloud Settings → Secrets 設定）
+FINMIND_TOKEN = "eyJ..."
+TELEGRAM_BOT_TOKEN = "7123456789:AAH..."
+TELEGRAM_CHAT_ID = "-100..."
+GITHUB_TOKEN = "ghp_..."
+APP_PASSWORD = "your_password"
+```
+
+### GitHub Actions（每日排程）
+```
+Repository Secrets:
+  FINMIND_TOKEN
+  TELEGRAM_BOT_TOKEN
+  TELEGRAM_CHAT_ID
+```
+
+### 快取目錄
+```
+~/.tw-stock-screener/cache/          # Parquet 快取檔
+~/.tw-stock-screener/cache/stock_list.parquet   # 股票清單快取
+```
+
+## 自動權重系統
+
+市場溫度由 S+A 級佔比決定（使用固定 DEFAULT_WEIGHTS 計算，避免迴圈偏差）：
+
+| 溫度 | S+A 佔比 | 策略傾向 |
+|------|----------|----------|
+| 過熱 | ≥40% | 偏防禦（法人+融資+技術） |
+| 偏熱 | ≥25% | 順勢操作（均線+量價） |
+| 溫和 | ≥15% | 均衡配置 |
+| 偏冷 | ≥5% | 偏價值（法人+技術+融資） |
+| 極冷 | <5% | 關注外資動向（法人+融資+美股） |
+
+## 特殊設計備註
+
+- `daily_scan.py` 直接用 `requests.post` 發 Telegram，不用 `utils/telegram_notify`，因為 GitHub Actions 沒有 `st.secrets`
+- `daily_scan.py` 融資融券和集保權重設為 0，避免缺資料影響排名
+- `pages/4_策略設定.py` 直接修改 `config.settings` 模組屬性（`cfg.RSI_PERIOD = ...`），只在同一 session 內生效
+- 科技業快捷預設用 `session_state` 控制 multiselect 值，避免 checkbox 切換時 Streamlit default 衝突
+- 超過 200 檔時統一用成交量篩選 TOP 200，再進 Phase B 完整分析
