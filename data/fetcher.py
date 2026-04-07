@@ -112,18 +112,34 @@ def fetch_stock_prices(stock_id: str = None, start_date: str = None,
 
 def _parse_yf_single(data, ticker: str, stock_id: str) -> pd.DataFrame:
     """從 yfinance 下載結果中提取單檔股票資料"""
-    # yfinance 多檔回傳 MultiIndex columns: (Ticker, Price)
+    # yfinance MultiIndex 有兩種格式：
+    #   舊版 group_by="ticker": (Ticker, Price)  → data[ticker] 取出
+    #   新版 0.2.x+:           (Price, Ticker)   → data.xs(ticker, level=1, axis=1) 取出
     # 單檔回傳普通 columns: Price
     df = None
     if isinstance(data.columns, pd.MultiIndex):
-        level0 = data.columns.get_level_values(0)
-        # 新版 yfinance 可能用 "Ticker" level 或直接 ticker symbol
-        if ticker in level0:
-            df = data[ticker].copy()
-        elif ticker.upper() in level0:
-            df = data[ticker.upper()].copy()
+        level0 = set(data.columns.get_level_values(0))
+        level1 = set(data.columns.get_level_values(1))
+
+        _tk = ticker
+        _tk_up = ticker.upper()
+
+        if _tk in level0 or _tk_up in level0:
+            # 舊版格式: level0 是 ticker
+            df = data[_tk if _tk in level0 else _tk_up].copy()
+        elif _tk in level1 or _tk_up in level1:
+            # 新版格式: level1 是 ticker
+            t = _tk if _tk in level1 else _tk_up
+            try:
+                df = data.xs(t, level=1, axis=1).copy()
+            except Exception:
+                return pd.DataFrame()
         else:
             return pd.DataFrame()
+
+        # 確保 df 是 DataFrame（不是 Series）
+        if isinstance(df, pd.Series):
+            df = df.to_frame()
     else:
         df = data.copy()
 
