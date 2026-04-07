@@ -374,6 +374,9 @@ def _normalize_price_df(df: pd.DataFrame) -> pd.DataFrame:
         "close": "close",
     })
 
+    # 移除重複欄位名（concat 不同格式的 df 可能產生）
+    df = df.loc[:, ~df.columns.duplicated()]
+
     keep_cols = ["date", "stock_id", "open", "high", "low", "close", "volume"]
     available = [c for c in keep_cols if c in df.columns]
     df = df[available].copy()
@@ -387,9 +390,15 @@ def _normalize_price_df(df: pd.DataFrame) -> pd.DataFrame:
 
     for col in ["open", "high", "low", "close"]:
         if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
+            s = df[col]
+            if isinstance(s, pd.DataFrame):
+                s = s.iloc[:, 0]
+            df[col] = pd.to_numeric(s, errors="coerce")
     if "volume" in df.columns:
-        df["volume"] = pd.to_numeric(df["volume"], errors="coerce")
+        s = df["volume"]
+        if isinstance(s, pd.DataFrame):
+            s = s.iloc[:, 0]
+        df["volume"] = pd.to_numeric(s, errors="coerce")
 
     sort_by = [c for c in ["stock_id", "date"] if c in df.columns]
     if sort_by:
