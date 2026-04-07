@@ -666,7 +666,11 @@ if run_btn:
         name = stock.get("name", sid)
         industry = stock.get("industry", "")
         latest_close = price_df["close"].iloc[-1]
-        latest_vol = price_df["volume"].iloc[-1]
+        latest_vol = price_df["volume"].iloc[-1] if "volume" in price_df.columns else 0
+        if pd.isna(latest_close) or pd.isna(latest_vol):
+            _log(f"{sid} 最後一筆資料有 NaN (close={latest_close}, vol={latest_vol})，跳過", "WARN")
+            continue
+        latest_vol = int(latest_vol)
 
         # 波動率風險指標
         from utils.indicators import volatility_risk
@@ -680,7 +684,7 @@ if run_btn:
             "name": name,
             "industry": industry,
             "close": round(latest_close, 2),
-            "volume": int(latest_vol),
+            "volume": latest_vol,
             "ma_breakout_score": round(ma_score, 1),
             "volume_price_score": round(vp_score, 1),
             "relative_strength_score": round(rs_score, 1),

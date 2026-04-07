@@ -312,7 +312,7 @@ def main():
             "name": stock.get("name", sid),
             "industry": stock.get("industry", ""),
             "close": round(price_df["close"].iloc[-1], 2),
-            "volume": int(price_df["volume"].iloc[-1]),
+            "volume": int(price_df["volume"].iloc[-1]) if pd.notna(price_df["volume"].iloc[-1]) else 0,
             "ma_breakout_score": round(ma_score, 1),
             "volume_price_score": round(vp_score, 1),
             "relative_strength_score": round(rs_score, 1),
