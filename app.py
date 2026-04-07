@@ -343,7 +343,9 @@ if run_btn:
         status_text.info(f"已下載 {all_prices['stock_id'].nunique()} 檔股票資料")
         _update_token_display("價量資料完成")
     except Exception as e:
+        import traceback
         st.error(f"取得價量資料失敗: {e}")
+        st.code(traceback.format_exc(), language="text")
         st.stop()
 
     # Step 3: 取得美股與夜盤資料 (全市場共用，只抓一次)

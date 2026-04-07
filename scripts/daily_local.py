@@ -44,6 +44,84 @@ TECH_INDUSTRIES = [
 PHASE_B_LIMIT = 50
 
 
+def _send_telegram_report(ranked, date_str, new_entries, exits, history_dir):
+    """推播 TOP 10 文字訊息 + CSV 附件到 Telegram"""
+    import requests as _req
+
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
+    if not token or not chat_id:
+        print("  跳過 TG 推播（未設定 TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID）")
+        return
+
+    # 組文字訊息
+    lines = [f"📊 <b>每日科技股分析 — {date_str}</b>", ""]
+    grade_emoji = {"S": "🔥", "A": "⭐", "B": "🟢", "C": "🟡", "D": "⚪"}
+    for _, row in ranked.head(10).iterrows():
+        g = str(row.get("grade", ""))
+        emoji = grade_emoji.get(g, "")
+        lines.append(
+            f"#{int(row['rank']):>2}  <b>{row['stock_id']} {row['name']}</b>"
+            f"  {row['composite_score']:.1f}分 {emoji}{g}"
+        )
+    lines.append("")
+
+    if new_entries:
+        lines.append(f"🆕 新進 TOP 20: {', '.join(new_entries)}")
+    if exits:
+        lines.append(f"📤 退出 TOP 20: {', '.join(exits)}")
+
+    lines.append("")
+    lines.append(f"共分析 {len(ranked)} 檔 | S:{len(ranked[ranked['grade']=='S'])} "
+                 f"A:{len(ranked[ranked['grade']=='A'])} "
+                 f"B:{len(ranked[ranked['grade']=='B'])}")
+    lines.append("")
+    lines.append('💡 <a href="https://tw-stock-screener-tom-annie.streamlit.app/">完整排名請到網頁版查看</a>')
+
+    msg = "\n".join(lines)
+
+    # 發送文字訊息
+    try:
+        resp = _req.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"},
+            timeout=15,
+        )
+        if resp.status_code == 200:
+            print("  TG 訊息已推播")
+        else:
+            print(f"  TG 訊息失敗: {resp.status_code}")
+    except Exception as e:
+        print(f"  TG 訊息異常: {e}")
+
+    # 發送 CSV 附件
+    try:
+        csv_path = history_dir / f"{date_str}.csv"
+        export_cols = ["rank", "stock_id", "name", "industry", "close", "volume",
+                       "composite_score", "grade",
+                       "ma_breakout_score", "volume_price_score",
+                       "relative_strength_score", "institutional_flow_score",
+                       "enhanced_technical_score", "margin_analysis_score",
+                       "us_market_score", "shareholder_score"]
+        avail = [c for c in export_cols if c in ranked.columns]
+        ranked[avail].to_csv(csv_path, index=False, encoding="utf-8-sig")
+
+        with open(csv_path, "rb") as f:
+            resp = _req.post(
+                f"https://api.telegram.org/bot{token}/sendDocument",
+                data={"chat_id": chat_id, "caption": f"📎 完整分析結果 {date_str}"},
+                files={"document": (f"台股科技_{date_str}.csv", f, "text/csv")},
+                timeout=30,
+            )
+        if resp.status_code == 200:
+            print("  TG CSV 已傳送")
+        else:
+            print(f"  TG CSV 失敗: {resp.status_code}")
+        csv_path.unlink(missing_ok=True)
+    except Exception as e:
+        print(f"  TG CSV 異常: {e}")
+
+
 def main():
     import pandas as pd
     from data.fetcher import (
@@ -280,6 +358,8 @@ def main():
     print(f"{'='*60}")
 
     # Step 10: 簡易歷史比對
+    new_entries = set()
+    exits = set()
     hist_files = sorted(history_dir.glob("*.parquet"), reverse=True)
     if len(hist_files) >= 2:
         prev_file = hist_files[1]  # 昨天
@@ -288,13 +368,16 @@ def main():
             today_top = set(ranked.head(20)["stock_id"])
             prev_top = set(prev.head(20)["stock_id"])
             new_entries = today_top - prev_top
+            exits = prev_top - today_top
             if new_entries:
                 print(f"\n  🆕 新進 TOP 20: {', '.join(new_entries)}")
-            exits = prev_top - today_top
             if exits:
                 print(f"  📤 退出 TOP 20: {', '.join(exits)}")
         except Exception:
             pass
+
+    # Step 11: TG 推播 + CSV 附件
+    _send_telegram_report(ranked, end_date_str, new_entries, exits, history_dir)
 
     print(f"\n[{datetime.now()}] 分析完成！")
 

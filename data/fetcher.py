@@ -219,12 +219,12 @@ def _fetch_prices_yfinance_batch(stock_ids: list, start_date: str,
                 group_by="ticker", progress=False, threads=True,
                 auto_adjust=True
             )
-            if not data.empty:
+            if isinstance(data, pd.DataFrame) and not data.empty:
                 for sid in batch:
                     ticker = f"{sid}.TW"
                     try:
                         df_s = _parse_yf_single(data, ticker, sid)
-                        if not df_s.empty:
+                        if isinstance(df_s, pd.DataFrame) and not df_s.empty:
                             all_dfs.append(df_s)
                             fetched_sids.add(sid)
                     except Exception:
@@ -242,12 +242,12 @@ def _fetch_prices_yfinance_batch(stock_ids: list, start_date: str,
                     group_by="ticker", progress=False, threads=True,
                     auto_adjust=True
                 )
-                if not data2.empty:
+                if isinstance(data2, pd.DataFrame) and not data2.empty:
                     for sid in missing:
                         ticker = f"{sid}.TWO"
                         try:
                             df_s = _parse_yf_single(data2, ticker, sid)
-                            if not df_s.empty:
+                            if isinstance(df_s, pd.DataFrame) and not df_s.empty:
                                 all_dfs.append(df_s)
                                 fetched_sids.add(sid)
                         except Exception:
@@ -257,7 +257,11 @@ def _fetch_prices_yfinance_batch(stock_ids: list, start_date: str,
 
     if not all_dfs:
         return pd.DataFrame()
-    return pd.concat(all_dfs, ignore_index=True)
+    # 過濾掉非 DataFrame 的項目
+    valid_dfs = [d for d in all_dfs if isinstance(d, pd.DataFrame) and not d.empty]
+    if not valid_dfs:
+        return pd.DataFrame()
+    return pd.concat(valid_dfs, ignore_index=True)
 
 
 def fetch_stock_prices_batch(stock_ids: list, start_date: str,
@@ -336,10 +340,11 @@ def fetch_stock_prices_batch(stock_ids: list, start_date: str,
             if api_calls % 50 == 0 and api_calls > 0:
                 time.sleep(0.3)
 
-    if not all_dfs:
+    valid_dfs = [d for d in all_dfs if isinstance(d, pd.DataFrame) and not d.empty]
+    if not valid_dfs:
         return pd.DataFrame()
 
-    combined = pd.concat(all_dfs, ignore_index=True)
+    combined = pd.concat(valid_dfs, ignore_index=True)
     return _normalize_price_df(combined)
 
 
