@@ -135,6 +135,112 @@ st.sidebar.caption("資料來源：FinMind / 台灣證交所")
 st.title("🇹🇼 台股智慧選股系統")
 st.markdown("結合 **八大策略** 的綜合選股平台（突破均線/量價齊揚/相對強弱/法人籌碼/技術綜合/融資融券/美股連動/大戶籌碼）")
 
+# ===== 大盤概況 =====
+with st.expander("📈 大盤概況", expanded=False):
+    @st.cache_data(ttl=3600, show_spinner=False)
+    def _load_taiex():
+        from data.fetcher import _fetch_taiex_yfinance
+        from datetime import timedelta, datetime as _dt
+        _end = _dt.now().strftime("%Y-%m-%d")
+        _start = (_dt.now() - timedelta(days=120)).strftime("%Y-%m-%d")
+        return _fetch_taiex_yfinance(_start, _end)
+
+    _taiex_df = _load_taiex()
+    if not _taiex_df.empty and "close" in _taiex_df.columns and len(_taiex_df) >= 20:
+        import plotly.graph_objects as go
+        from utils.indicators import moving_average, rsi, stochastic_kd, macd
+
+        _taiex_df = _taiex_df.sort_values("date").reset_index(drop=True)
+        _close = _taiex_df["close"]
+        _high = _taiex_df.get("high", _close)
+        _low = _taiex_df.get("low", _close)
+        _dates = _taiex_df["date"]
+
+        # 指標計算
+        _ma20 = moving_average(_close, 20)
+        _ma60 = moving_average(_close, 60)
+        _rsi14 = rsi(_close, 14)
+        _k, _d = stochastic_kd(_high, _low, _close)
+        _macd_dif, _macd_dem, _macd_hist = macd(_close)
+
+        # 最新數據
+        _last_close = _close.iloc[-1]
+        _prev_close = _close.iloc[-2] if len(_close) >= 2 else _last_close
+        _chg = _last_close - _prev_close
+        _chg_pct = (_chg / _prev_close * 100) if _prev_close != 0 else 0
+        _last_rsi = _rsi14.iloc[-1] if not _rsi14.empty else 0
+        _last_k = _k.iloc[-1] if not _k.empty else 0
+        _last_d = _d.iloc[-1] if not _d.empty else 0
+
+        # 指標概覽
+        mc1, mc2, mc3, mc4 = st.columns(4)
+        mc1.metric("加權指數", f"{_last_close:,.0f}",
+                    delta=f"{_chg:+,.0f} ({_chg_pct:+.2f}%)")
+        _rsi_label = "過熱" if _last_rsi > 70 else ("偏強" if _last_rsi > 55 else ("中性" if _last_rsi > 45 else "偏弱"))
+        mc2.metric("RSI(14)", f"{_last_rsi:.1f}", delta=_rsi_label)
+        _kd_label = "高檔鈍化" if _last_k > 80 else ("多方" if _last_k > 50 else ("空方" if _last_k > 20 else "低檔"))
+        mc3.metric("KD", f"K:{_last_k:.0f} D:{_last_d:.0f}", delta=_kd_label)
+        _ma20_val = _ma20.iloc[-1] if not _ma20.empty else 0
+        _ma_label = f"站上 MA20" if _last_close > _ma20_val else "跌破 MA20"
+        mc4.metric("MA20", f"{_ma20_val:,.0f}", delta=_ma_label)
+
+        # K 線 + MA 走勢圖
+        fig = go.Figure()
+        fig.add_trace(go.Candlestick(
+            x=_dates, open=_taiex_df.get("open", _close),
+            high=_high, low=_low, close=_close,
+            name="加權指數", increasing_line_color="#EF5350",
+            decreasing_line_color="#26A69A",
+        ))
+        fig.add_trace(go.Scatter(
+            x=_dates, y=_ma20, name="MA20",
+            line=dict(color="#FFA726", width=1.5, dash="dot"),
+        ))
+        if len(_close) >= 60:
+            fig.add_trace(go.Scatter(
+                x=_dates, y=_ma60, name="MA60",
+                line=dict(color="#42A5F5", width=1.5, dash="dot"),
+            ))
+        fig.update_layout(
+            height=350, template="plotly_dark",
+            margin=dict(l=50, r=20, t=10, b=10),
+            xaxis_rangeslider_visible=False,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+        )
+        fig.update_xaxes(type="category", nticks=15)
+        st.plotly_chart(fig, use_container_width=True)
+
+        # RSI + KD + MACD 副圖
+        _sub_tab1, _sub_tab2 = st.columns(2)
+        with _sub_tab1:
+            fig_rsi = go.Figure()
+            fig_rsi.add_trace(go.Scatter(x=_dates, y=_rsi14, name="RSI",
+                                          line=dict(color="#AB47BC", width=1.5)))
+            fig_rsi.add_hline(y=70, line_dash="dash", line_color="#EF5350", opacity=0.5)
+            fig_rsi.add_hline(y=30, line_dash="dash", line_color="#26A69A", opacity=0.5)
+            fig_rsi.add_hrect(y0=30, y1=70, fillcolor="gray", opacity=0.1)
+            fig_rsi.update_layout(height=180, template="plotly_dark",
+                                   margin=dict(l=50, r=20, t=25, b=10),
+                                   title=dict(text="RSI(14)", font=dict(size=12)))
+            fig_rsi.update_xaxes(type="category", nticks=10)
+            st.plotly_chart(fig_rsi, use_container_width=True)
+        with _sub_tab2:
+            fig_kd = go.Figure()
+            fig_kd.add_trace(go.Scatter(x=_dates, y=_k, name="K",
+                                         line=dict(color="#FF7043", width=1.5)))
+            fig_kd.add_trace(go.Scatter(x=_dates, y=_d, name="D",
+                                         line=dict(color="#42A5F5", width=1.5)))
+            fig_kd.add_hline(y=80, line_dash="dash", line_color="#EF5350", opacity=0.5)
+            fig_kd.add_hline(y=20, line_dash="dash", line_color="#26A69A", opacity=0.5)
+            fig_kd.update_layout(height=180, template="plotly_dark",
+                                  margin=dict(l=50, r=20, t=25, b=10),
+                                  title=dict(text="KD(9,3)", font=dict(size=12)),
+                                  legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0))
+            fig_kd.update_xaxes(type="category", nticks=10)
+            st.plotly_chart(fig_kd, use_container_width=True)
+    else:
+        st.caption("大盤資料暫時無法載入")
+
 st.markdown("---")
 
 # 掃描設定
