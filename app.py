@@ -795,69 +795,70 @@ if "ranked" in st.session_state:
         # 儲存溫度供自動權重使用
         st.session_state["market_temp_label"] = temp_label
 
-        t_col1, t_col2 = st.columns([1, 2])
-        with t_col1:
-            fig_gauge = _go.Figure(_go.Indicator(
-                mode="gauge+number",
-                value=hot_pct,
-                number={"suffix": "%", "font": {"size": 36}},
-                title={"text": f"市場溫度：{temp_label}", "font": {"size": 16}},
-                gauge={
-                    "axis": {"range": [0, 100], "ticksuffix": "%"},
-                    "bar": {"color": temp_color},
-                    "steps": [
-                        {"range": [0, 5], "color": "#E0E0E0"},
-                        {"range": [5, 15], "color": "#BBDEFB"},
-                        {"range": [15, 25], "color": "#C8E6C9"},
-                        {"range": [25, 40], "color": "#FFE0B2"},
-                        {"range": [40, 100], "color": "#FFCDD2"},
-                    ],
-                    "threshold": {
-                        "line": {"color": "white", "width": 2},
-                        "thickness": 0.75,
-                        "value": hot_pct,
+        with st.expander("📊 市場溫度與等級分佈", expanded=False):
+            t_col1, t_col2 = st.columns([1, 2])
+            with t_col1:
+                fig_gauge = _go.Figure(_go.Indicator(
+                    mode="gauge+number",
+                    value=hot_pct,
+                    number={"suffix": "%", "font": {"size": 36}},
+                    title={"text": f"市場溫度：{temp_label}", "font": {"size": 16}},
+                    gauge={
+                        "axis": {"range": [0, 100], "ticksuffix": "%"},
+                        "bar": {"color": temp_color},
+                        "steps": [
+                            {"range": [0, 5], "color": "#E0E0E0"},
+                            {"range": [5, 15], "color": "#BBDEFB"},
+                            {"range": [15, 25], "color": "#C8E6C9"},
+                            {"range": [25, 40], "color": "#FFE0B2"},
+                            {"range": [40, 100], "color": "#FFCDD2"},
+                        ],
+                        "threshold": {
+                            "line": {"color": "white", "width": 2},
+                            "thickness": 0.75,
+                            "value": hot_pct,
+                        },
                     },
-                },
-            ))
-            fig_gauge.update_layout(
-                height=220, margin=dict(l=20, r=20, t=40, b=10),
-                template="plotly_dark",
-            )
-            st.plotly_chart(fig_gauge, use_container_width=True)
+                ))
+                fig_gauge.update_layout(
+                    height=220, margin=dict(l=20, r=20, t=40, b=10),
+                    template="plotly_dark",
+                )
+                st.plotly_chart(fig_gauge, use_container_width=True)
 
-        with t_col2:
-            st.markdown("#### 等級分佈")
-            dist_fig = _go.Figure(_go.Bar(
-                x=["S(>80)", "A(65-80)", "B(50-65)", "C(30-50)", "D(<30)"],
-                y=[s_pct, a_pct, b_pct, c_pct, d_pct],
-                marker_color=["#FFD700", "#4CAF50", "#FF9800", "#9E9E9E", "#EF5350"],
-                text=[f"{v:.0f}%" for v in [s_pct, a_pct, b_pct, c_pct, d_pct]],
-                textposition="auto",
-            ))
-            dist_fig.update_layout(
-                height=220, template="plotly_dark",
-                yaxis_title="佔比 (%)",
-                margin=dict(l=50, r=20, t=10, b=30),
-            )
-            st.plotly_chart(dist_fig, use_container_width=True)
+            with t_col2:
+                st.markdown("#### 等級分佈")
+                dist_fig = _go.Figure(_go.Bar(
+                    x=["S(>80)", "A(65-80)", "B(50-65)", "C(30-50)", "D(<30)"],
+                    y=[s_pct, a_pct, b_pct, c_pct, d_pct],
+                    marker_color=["#FFD700", "#4CAF50", "#FF9800", "#9E9E9E", "#EF5350"],
+                    text=[f"{v:.0f}%" for v in [s_pct, a_pct, b_pct, c_pct, d_pct]],
+                    textposition="auto",
+                ))
+                dist_fig.update_layout(
+                    height=220, template="plotly_dark",
+                    yaxis_title="佔比 (%)",
+                    margin=dict(l=50, r=20, t=10, b=30),
+                )
+                st.plotly_chart(dist_fig, use_container_width=True)
 
-        # 溫度建議 + 自動權重提示
-        _advice = {
-            "過熱": ("warning", "市場過熱，S+A 級佔比偏高，留意追高風險，可考慮減碼或嚴設停利",
-                     "自動權重已提高：法人籌碼、融資融券、技術綜合（偏防禦）"),
-            "偏熱": ("info", "市場偏熱，多數股票動能強，適合順勢操作但注意控制部位",
-                     "自動權重已提高：突破均線、量價齊揚（順勢操作）"),
-            "溫和": ("success", "市場溫和，選股空間適中，適合精選高分標的佈局",
-                     "自動權重使用預設均衡配置"),
-            "偏冷": ("info", "市場偏冷，強勢股稀少，建議保守觀望或只操作少數強勢股",
-                     "自動權重已提高：法人籌碼、技術綜合、融資融券（偏價值）"),
-            "極冷": ("warning", "市場極冷，幾乎沒有高分標的，建議持有現金等待轉機",
-                     "自動權重已提高：法人籌碼、融資融券、美股連動（關注外資動向）"),
-        }
-        _level, _msg, _weight_hint = _advice.get(temp_label, ("info", "", ""))
-        getattr(st, _level)(_msg)
-        if weight_mode == "自動（依市場溫度）":
-            st.caption(f"🔄 {_weight_hint}（下次分析自動套用新權重）")
+            # 溫度建議 + 自動權重提示
+            _advice = {
+                "過熱": ("warning", "市場過熱，S+A 級佔比偏高，留意追高風險，可考慮減碼或嚴設停利",
+                         "自動權重已提高：法人籌碼、融資融券、技術綜合（偏防禦）"),
+                "偏熱": ("info", "市場偏熱，多數股票動能強，適合順勢操作但注意控制部位",
+                         "自動權重已提高：突破均線、量價齊揚（順勢操作）"),
+                "溫和": ("success", "市場溫和，選股空間適中，適合精選高分標的佈局",
+                         "自動權重使用預設均衡配置"),
+                "偏冷": ("info", "市場偏冷，強勢股稀少，建議保守觀望或只操作少數強勢股",
+                         "自動權重已提高：法人籌碼、技術綜合、融資融券（偏價值）"),
+                "極冷": ("warning", "市場極冷，幾乎沒有高分標的，建議持有現金等待轉機",
+                         "自動權重已提高：法人籌碼、融資融券、美股連動（關注外資動向）"),
+            }
+            _level, _msg, _weight_hint = _advice.get(temp_label, ("info", "", ""))
+            getattr(st, _level)(_msg)
+            if weight_mode == "自動（依市場溫度）":
+                st.caption(f"🔄 {_weight_hint}（下次分析自動套用新權重）")
 
     st.markdown("---")
 
@@ -1162,49 +1163,50 @@ if "ranked" in st.session_state:
     )
 
 else:
-    st.markdown("""
-    ### 使用說明
+    with st.expander("📖 使用說明與評分等級", expanded=True):
+        st.markdown("""
+        ### 使用說明
 
-    1. **設定 FinMind Token** (選填)：至 [FinMind](https://finmind.github.io/) 免費註冊取得 Token，可提高 API 請求額度
-    2. **調整策略權重**：在左側滑桿調整八大策略的權重比例
-    3. **點擊「開始分析」**：系統將自動下載最新資料並計算
+        1. **設定 FinMind Token** (選填)：至 [FinMind](https://finmind.github.io/) 免費註冊取得 Token，可提高 API 請求額度
+        2. **調整策略權重**：在左側滑桿調整八大策略的權重比例
+        3. **點擊「開始分析」**：系統將自動下載最新資料並計算
 
-    ---
+        ---
 
-    ### 八大選股策略
+        ### 八大選股策略
 
-    | 策略 | 說明 | 核心指標 |
-    |------|------|----------|
-    | **突破均線** | 偵測股價突破均線 | 站上 MA5/10/20/60 數量、多頭排列 |
-    | **量價齊揚** | 價漲量增共振 | 量比、連續天數、量能趨勢 |
-    | **相對強弱** | 動能指標 | RSI(14)、vs 大盤超額報酬 |
-    | **法人籌碼** | 三大法人動向 | 外資/投信買賣超、連續天數 |
-    | **技術綜合** | 多重指標交叉驗證 | KD/布林/OBV/MACD/乖離率 |
-    | **融資融券** | 籌碼沉澱分析 | 融資變化、融券變化、券資比 |
-    | **美股連動** | 國際市場氛圍 | 費半趨勢、台積電ADR折溢價、夜盤價差 |
-    | **大戶籌碼** | 集保股權分散表 | 大戶持股比例、增減變化、散戶動向 |
+        | 策略 | 說明 | 核心指標 |
+        |------|------|----------|
+        | **突破均線** | 偵測股價突破均線 | 站上 MA5/10/20/60 數量、多頭排列 |
+        | **量價齊揚** | 價漲量增共振 | 量比、連續天數、量能趨勢 |
+        | **相對強弱** | 動能指標 | RSI(14)、vs 大盤超額報酬 |
+        | **法人籌碼** | 三大法人動向 | 外資/投信買賣超、連續天數 |
+        | **技術綜合** | 多重指標交叉驗證 | KD/布林/OBV/MACD/乖離率 |
+        | **融資融券** | 籌碼沉澱分析 | 融資變化、融券變化、券資比 |
+        | **美股連動** | 國際市場氛圍 | 費半趨勢、台積電ADR折溢價、夜盤價差 |
+        | **大戶籌碼** | 集保股權分散表 | 大戶持股比例、增減變化、散戶動向 |
 
-    > 完整策略說明請前往左側選單的 **「策略教學」** 頁面
+        > 完整策略說明請前往左側選單的 **「策略教學」** 頁面
 
-    ---
+        ---
 
-    ### 評分等級
+        ### 評分等級
 
-    - **S 級** (>80分)：強烈關注 — 多數策略同時看多
-    - **A 級** (65-80分)：值得追蹤 — 基本面技術面俱佳
-    - **B 級** (50-65分)：觀望 — 訊號不夠明確
-    - **C 級** (30-50分)：偏弱 — 僅少數策略正面
-    - **D 級** (<30分)：避開 — 多數策略偏空
+        - **S 級** (>80分)：強烈關注 — 多數策略同時看多
+        - **A 級** (65-80分)：值得追蹤 — 基本面技術面俱佳
+        - **B 級** (50-65分)：觀望 — 訊號不夠明確
+        - **C 級** (30-50分)：偏弱 — 僅少數策略正面
+        - **D 級** (<30分)：避開 — 多數策略偏空
 
-    ---
+        ---
 
-    ### 黃金訊號組合（重點關注）
+        ### 黃金訊號組合（重點關注）
 
-    - **法人同買 + 融資減少 + KD/MACD 黃金交叉** → 主力進場＋籌碼乾淨＋技術啟動
-    - **均線多頭排列 + 量價齊揚 + RSI 50~65** → 趨勢確立＋動能充足＋尚未過熱
+        - **法人同買 + 融資減少 + KD/MACD 黃金交叉** → 主力進場＋籌碼乾淨＋技術啟動
+        - **均線多頭排列 + 量價齊揚 + RSI 50~65** → 趨勢確立＋動能充足＋尚未過熱
 
-    ### 危險訊號（應該避開）
+        ### 危險訊號（應該避開）
 
-    - **融資暴增 + RSI > 80 + 乖離過大** → 散戶追高末段，通常是波段高點
-    - **法人全賣 + 量縮 + 均線跌破** → 趨勢反轉向下
-    """)
+        - **融資暴增 + RSI > 80 + 乖離過大** → 散戶追高末段，通常是波段高點
+        - **法人全賣 + 量縮 + 均線跌破** → 趨勢反轉向下
+        """)

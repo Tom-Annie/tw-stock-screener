@@ -638,7 +638,7 @@ if "portfolio_results" in st.session_state:
             f"｜現價 {r['current_price']}　"
             f"｜損益 {r['pnl_pct']:+.1f}%　"
             f"｜分數 {r['composite']}",
-            expanded=True
+            expanded=False
         ):
             # 上半：損益 + 建議
             ac1, ac2 = st.columns([1, 2])
@@ -706,7 +706,6 @@ if "portfolio_results" in st.session_state:
 
     # 操作摘要表
     st.markdown("---")
-    st.markdown("### 操作摘要")
 
     summary_data = []
     for r in results:
@@ -724,32 +723,33 @@ if "portfolio_results" in st.session_state:
             "原因": r["action"]["reason"],
         })
 
-    if summary_data:
-        summary_df = pd.DataFrame(summary_data)
+    summary_df = pd.DataFrame(summary_data) if summary_data else None
 
-        # 根據建議類型上色
-        def _color_action(val):
-            colors = {
-                "持有續抱": "background-color: #1B5E20; color: white",
-                "持有": "background-color: #2E7D32; color: white",
-                "分批獲利": "background-color: #33691E; color: white",
-                "攤平加碼": "background-color: #1565C0; color: white",
-                "攤平或持有": "background-color: #1976D2; color: white",
-                "觀望": "background-color: #E65100; color: white",
-                "減碼一半": "background-color: #EF6C00; color: white",
-                "獲利了結": "background-color: #BF360C; color: white",
-                "考慮停損": "background-color: #C62828; color: white",
-                "停損": "background-color: #B71C1C; color: white",
-                "留意風險": "background-color: #D32F2F; color: white",
-            }
-            return colors.get(val, "")
+    with st.expander("📋 操作摘要總覽", expanded=False):
+        if summary_df is not None:
+            # 根據建議類型上色
+            def _color_action(val):
+                colors = {
+                    "持有續抱": "background-color: #1B5E20; color: white",
+                    "持有": "background-color: #2E7D32; color: white",
+                    "分批獲利": "background-color: #33691E; color: white",
+                    "攤平加碼": "background-color: #1565C0; color: white",
+                    "攤平或持有": "background-color: #1976D2; color: white",
+                    "觀望": "background-color: #E65100; color: white",
+                    "減碼一半": "background-color: #EF6C00; color: white",
+                    "獲利了結": "background-color: #BF360C; color: white",
+                    "考慮停損": "background-color: #C62828; color: white",
+                    "停損": "background-color: #B71C1C; color: white",
+                    "留意風險": "background-color: #D32F2F; color: white",
+                }
+                return colors.get(val, "")
 
-        styled = summary_df.style.map(_color_action, subset=["建議"])
-        st.dataframe(styled, use_container_width=True, hide_index=True)
+            styled = summary_df.style.map(_color_action, subset=["建議"])
+            st.dataframe(styled, use_container_width=True, hide_index=True)
 
     # 匯出分析報告 + LINE 通知
     dl_col, line_col = st.columns(2)
-    if summary_data:
+    if summary_df is not None:
         csv = summary_df.to_csv(index=False).encode("utf-8-sig")
         dl_col.download_button(
             "📥 下載分析報告 (CSV)",
@@ -778,53 +778,53 @@ if "portfolio_results" in st.session_state:
         import numpy as np
 
         st.markdown("---")
-        st.markdown("### 持股相關性")
-        st.caption("數值越接近 1 代表走勢越同步，持股高度相關代表風險集中")
+        with st.expander("🔗 持股相關性分析", expanded=False):
+            st.caption("數值越接近 1 代表走勢越同步，持股高度相關代表風險集中")
 
-        # 建立收盤價矩陣
-        close_dict = {}
-        for r in valid_with_price:
-            sid = r["stock_id"]
-            pdf = r["price_df"].set_index("date")["close"]
-            close_dict[f"{sid} {r.get('name', '')}"] = pdf
+            # 建立收盤價矩陣
+            close_dict = {}
+            for r in valid_with_price:
+                sid = r["stock_id"]
+                pdf = r["price_df"].set_index("date")["close"]
+                close_dict[f"{sid} {r.get('name', '')}"] = pdf
 
-        close_df = pd.DataFrame(close_dict).dropna()
-        if len(close_df) >= 20 and len(close_df.columns) >= 2:
-            corr_matrix = close_df.corr()
+            close_df = pd.DataFrame(close_dict).dropna()
+            if len(close_df) >= 20 and len(close_df.columns) >= 2:
+                corr_matrix = close_df.corr()
 
-            # Heatmap
-            labels = list(corr_matrix.columns)
-            fig_corr = _go.Figure(data=_go.Heatmap(
-                z=corr_matrix.values,
-                x=labels, y=labels,
-                colorscale="RdYlGn_r",
-                zmin=-1, zmax=1,
-                text=np.round(corr_matrix.values, 2),
-                texttemplate="%{text}",
-                textfont={"size": 11},
-            ))
-            fig_corr.update_layout(
-                height=max(300, len(labels) * 50),
-                template="plotly_dark",
-                margin=dict(l=10, r=10, t=10, b=10),
-            )
-            st.plotly_chart(fig_corr, use_container_width=True)
-
-            # 高相關性警告
-            high_corr_pairs = []
-            for i in range(len(labels)):
-                for j in range(i + 1, len(labels)):
-                    c = corr_matrix.iloc[i, j]
-                    if c > 0.85:
-                        high_corr_pairs.append((labels[i], labels[j], c))
-
-            if high_corr_pairs:
-                pair_text = "、".join(
-                    f"**{a}** / **{b}** ({c:.2f})" for a, b, c in high_corr_pairs
+                # Heatmap
+                labels = list(corr_matrix.columns)
+                fig_corr = _go.Figure(data=_go.Heatmap(
+                    z=corr_matrix.values,
+                    x=labels, y=labels,
+                    colorscale="RdYlGn_r",
+                    zmin=-1, zmax=1,
+                    text=np.round(corr_matrix.values, 2),
+                    texttemplate="%{text}",
+                    textfont={"size": 11},
+                ))
+                fig_corr.update_layout(
+                    height=max(300, len(labels) * 50),
+                    template="plotly_dark",
+                    margin=dict(l=10, r=10, t=10, b=10),
                 )
-                st.warning(f"以下持股走勢高度相關（>0.85），風險較集中：{pair_text}")
-            else:
-                st.success("持股之間相關性適中，風險分散良好")
+                st.plotly_chart(fig_corr, use_container_width=True)
+
+                # 高相關性警告
+                high_corr_pairs = []
+                for i in range(len(labels)):
+                    for j in range(i + 1, len(labels)):
+                        c = corr_matrix.iloc[i, j]
+                        if c > 0.85:
+                            high_corr_pairs.append((labels[i], labels[j], c))
+
+                if high_corr_pairs:
+                    pair_text = "、".join(
+                        f"**{a}** / **{b}** ({c:.2f})" for a, b, c in high_corr_pairs
+                    )
+                    st.warning(f"以下持股走勢高度相關（>0.85），風險較集中：{pair_text}")
+                else:
+                    st.success("持股之間相關性適中，風險分散良好")
 
     # ===== 調倉建議：賣出後推薦替代標的 =====
     EXIT_ACTIONS = {"停損", "獲利了結", "考慮停損", "留意風險"}

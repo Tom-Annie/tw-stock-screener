@@ -250,10 +250,10 @@ if stock_id and run_backtest:
     col_d.metric("回測交易天數", f"{len(df)}")
 
     # 各等級勝率表
-    st.markdown("#### 各評分等級表現")
-    grade_display = grade_stats.copy()
-    grade_display.columns = ["交易次數", "勝率%", "平均報酬%", "最大獲利%", "最大虧損%"]
-    st.dataframe(grade_display, use_container_width=True)
+    with st.expander("📊 各等級詳細統計", expanded=False):
+        grade_display = grade_stats.copy()
+        grade_display.columns = ["交易次數", "勝率%", "平均報酬%", "最大獲利%", "最大虧損%"]
+        st.dataframe(grade_display, use_container_width=True)
 
     # 最大回撤
     from utils.indicators import max_drawdown as calc_mdd
@@ -298,28 +298,28 @@ if stock_id and run_backtest:
     st.plotly_chart(fig, use_container_width=True)
 
     # 回撤走勢圖
-    st.markdown("#### 回撤走勢")
-    fig_dd = go.Figure()
-    if not strat_dd.empty:
-        fig_dd.add_trace(go.Scatter(
-            x=df["date"], y=strat_dd,
-            fill="tozeroy", name="策略回撤",
-            line=dict(color="#FF9800", width=1),
-            fillcolor="rgba(255,152,0,0.2)",
-        ))
-    if not bh_dd.empty:
-        fig_dd.add_trace(go.Scatter(
-            x=df["date"], y=bh_dd,
-            name="對照組回撤",
-            line=dict(color="#666", width=1, dash="dash"),
-        ))
-    fig_dd.update_layout(
-        height=250, template="plotly_dark",
-        yaxis_title="回撤 (%)",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02),
-        margin=dict(l=50, r=20, t=30, b=20),
-    )
-    st.plotly_chart(fig_dd, use_container_width=True)
+    with st.expander("📉 回撤走勢圖", expanded=False):
+        fig_dd = go.Figure()
+        if not strat_dd.empty:
+            fig_dd.add_trace(go.Scatter(
+                x=df["date"], y=strat_dd,
+                fill="tozeroy", name="策略回撤",
+                line=dict(color="#FF9800", width=1),
+                fillcolor="rgba(255,152,0,0.2)",
+            ))
+        if not bh_dd.empty:
+            fig_dd.add_trace(go.Scatter(
+                x=df["date"], y=bh_dd,
+                name="對照組回撤",
+                line=dict(color="#666", width=1, dash="dash"),
+            ))
+        fig_dd.update_layout(
+            height=250, template="plotly_dark",
+            yaxis_title="回撤 (%)",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02),
+            margin=dict(l=50, r=20, t=30, b=20),
+        )
+        st.plotly_chart(fig_dd, use_container_width=True)
 
     # 分數 vs 報酬散佈圖
     st.markdown("#### 綜合分數 vs 實際報酬")
@@ -341,20 +341,20 @@ if stock_id and run_backtest:
     st.plotly_chart(fig2, use_container_width=True)
 
     # 各策略相關性
-    st.markdown("#### 各策略分數與報酬的相關性")
-    score_cols = [c for c in df.columns if c.endswith("_score")]
-    correlations = {}
-    for col in score_cols:
-        corr = df[col].corr(df["return_pct"])
-        name = col.replace("_score", "")
-        correlations[name] = round(corr, 3)
+    with st.expander("🔬 各策略相關性分析", expanded=False):
+        score_cols = [c for c in df.columns if c.endswith("_score")]
+        correlations = {}
+        for col in score_cols:
+            corr = df[col].corr(df["return_pct"])
+            name = col.replace("_score", "")
+            correlations[name] = round(corr, 3)
 
-    corr_df = pd.DataFrame([correlations]).T
-    corr_df.columns = ["與報酬的相關係數"]
-    corr_df = corr_df.sort_values("與報酬的相關係數", ascending=False)
-    st.dataframe(corr_df, use_container_width=True)
+        corr_df = pd.DataFrame([correlations]).T
+        corr_df.columns = ["與報酬的相關係數"]
+        corr_df = corr_df.sort_values("與報酬的相關係數", ascending=False)
+        st.dataframe(corr_df, use_container_width=True)
 
-    st.caption("相關係數越高，代表該策略對預測漲跌越有效。可根據此結果調整主頁面的策略權重。")
+        st.caption("相關係數越高，代表該策略對預測漲跌越有效。可根據此結果調整主頁面的策略權重。")
 
 else:
     st.markdown("""
