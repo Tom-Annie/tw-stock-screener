@@ -386,7 +386,10 @@ def _normalize_price_df(df: pd.DataFrame) -> pd.DataFrame:
     if "volume" in df.columns:
         df["volume"] = pd.to_numeric(df["volume"], errors="coerce")
 
-    return df.sort_values(["stock_id", "date"]).reset_index(drop=True)
+    sort_by = [c for c in ["stock_id", "date"] if c in df.columns]
+    if sort_by:
+        df = df.sort_values(sort_by)
+    return df.reset_index(drop=True)
 
 
 def fetch_taiex(start_date: str, end_date: str = None) -> pd.DataFrame:
