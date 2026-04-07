@@ -111,97 +111,82 @@ def fetch_stock_prices(stock_id: str = None, start_date: str = None,
 
 
 def _parse_yf_single(data, ticker: str, stock_id: str) -> pd.DataFrame:
-    """從 yfinance 下載結果中提取單檔股票資料"""
-    # yfinance MultiIndex 有兩種格式：
-    #   舊版 group_by="ticker": (Ticker, Price)  → data[ticker] 取出
-    #   新版 0.2.x+:           (Price, Ticker)   → data.xs(ticker, level=1, axis=1) 取出
-    # 單檔回傳普通 columns: Price
-    df = None
-    if isinstance(data.columns, pd.MultiIndex):
-        level0 = set(data.columns.get_level_values(0))
-        level1 = set(data.columns.get_level_values(1))
-
-        _tk = ticker
-        _tk_up = ticker.upper()
-
-        if _tk in level0 or _tk_up in level0:
-            # 舊版格式: level0 是 ticker
-            df = data[_tk if _tk in level0 else _tk_up].copy()
-        elif _tk in level1 or _tk_up in level1:
-            # 新版格式: level1 是 ticker
-            t = _tk if _tk in level1 else _tk_up
-            try:
-                df = data.xs(t, level=1, axis=1).copy()
-            except Exception:
+    """從 yfinance 下載結果中提取單檔股票資料（相容 0.2.x ~ 1.2.x）"""
+    try:
+        df = None
+        if isinstance(data.columns, pd.MultiIndex):
+            # MultiIndex: 找 ticker 在哪個 level
+            for level in range(data.columns.nlevels):
+                vals = set(data.columns.get_level_values(level))
+                tk = ticker if ticker in vals else (ticker.upper() if ticker.upper() in vals else None)
+                if tk:
+                    try:
+                        df = data.xs(tk, level=level, axis=1).copy()
+                    except Exception:
+                        continue
+                    break
+            if df is None:
                 return pd.DataFrame()
         else:
-            return pd.DataFrame()
+            df = data.copy()
 
-        # 確保 df 是 DataFrame（不是 Series）
+        # 確保 df 是 DataFrame
         if isinstance(df, pd.Series):
             df = df.to_frame()
-    else:
-        df = data.copy()
 
-    # reset index 把 Date 從 index 拉出來
-    df = df.reset_index()
+        # reset index 把 Date 從 index 拉出來
+        if isinstance(df.index, pd.DatetimeIndex) or df.index.name in ("Date", "date", "Datetime"):
+            df = df.reset_index()
 
-    # 展平 tuple 欄位名（單檔 yfinance 有時回傳 ("Close", "") 格式）
-    new_cols = []
-    for c in df.columns:
-        if isinstance(c, tuple):
-            # 取 tuple 中第一個非空字串
-            name = next((str(x) for x in c if x and str(x).strip()), str(c))
-            new_cols.append(name)
-        else:
-            new_cols.append(str(c))
-    df.columns = new_cols
+        # 展平所有欄位名為純字串
+        flat_cols = []
+        for c in df.columns:
+            if isinstance(c, tuple):
+                # 取 tuple 中有意義的部分（非空字串）
+                parts = [str(x).strip() for x in c if x and str(x).strip()]
+                flat_cols.append(parts[0] if parts else str(c))
+            else:
+                flat_cols.append(str(c).strip())
+        df.columns = flat_cols
 
-    # 統一欄位名（不區分大小寫），每個目標名只取第一個匹配
-    col_map = {}
-    _mapped_targets = set()
-    for c in df.columns:
-        cl = c.lower().strip()
-        if cl == "date" and "date" not in _mapped_targets:
-            col_map[c] = "date"
-            _mapped_targets.add("date")
-        elif cl == "open" and "open" not in _mapped_targets:
-            col_map[c] = "open"
-            _mapped_targets.add("open")
-        elif cl == "high" and "high" not in _mapped_targets:
-            col_map[c] = "high"
-            _mapped_targets.add("high")
-        elif cl == "low" and "low" not in _mapped_targets:
-            col_map[c] = "low"
-            _mapped_targets.add("low")
-        elif cl in ("close", "adj close", "adjclose") and "close" not in _mapped_targets:
-            col_map[c] = "close"
-            _mapped_targets.add("close")
-        elif cl == "volume" and "volume" not in _mapped_targets:
-            col_map[c] = "volume"
-            _mapped_targets.add("volume")
-    df = df.rename(columns=col_map)
+        # 標準化欄位名（不區分大小寫），每個目標只取首次匹配
+        _target_map = {
+            "date": ["date", "datetime"],
+            "open": ["open"],
+            "high": ["high"],
+            "low": ["low"],
+            "close": ["close", "adj close", "adjclose"],
+            "volume": ["volume"],
+        }
+        col_rename = {}
+        found = set()
+        for c in df.columns:
+            cl = c.lower().strip()
+            for target, aliases in _target_map.items():
+                if target not in found and cl in aliases:
+                    col_rename[c] = target
+                    found.add(target)
+                    break
+        df = df.rename(columns=col_rename)
+        df = df.loc[:, ~df.columns.duplicated()]
 
-    # 去除重名欄位（保留第一個）
-    df = df.loc[:, ~df.columns.duplicated()]
+        if "close" not in df.columns or "date" not in df.columns:
+            return pd.DataFrame()
 
-    if "close" not in df.columns or "date" not in df.columns:
+        df = df.dropna(subset=["close"])
+        if df.empty:
+            return pd.DataFrame()
+
+        df["stock_id"] = stock_id
+        date_s = df["date"]
+        if isinstance(date_s, pd.DataFrame):
+            date_s = date_s.iloc[:, 0]
+        df["date"] = pd.to_datetime(date_s).dt.strftime("%Y-%m-%d")
+
+        keep = ["date", "stock_id", "open", "high", "low", "close", "volume"]
+        return df[[c for c in keep if c in df.columns]]
+    except Exception:
         return pd.DataFrame()
-
-    df = df.dropna(subset=["close"])
-    if df.empty:
-        return pd.DataFrame()
-
-    df["stock_id"] = stock_id
-    # 確保 df["date"] 是 Series
-    date_col = df["date"]
-    if isinstance(date_col, pd.DataFrame):
-        date_col = date_col.iloc[:, 0]
-    df["date"] = pd.to_datetime(date_col).dt.strftime("%Y-%m-%d")
-
-    keep = ["date", "stock_id", "open", "high", "low", "close", "volume"]
-    available = [c for c in keep if c in df.columns]
-    return df[available]
 
 
 def _fetch_prices_yfinance_batch(stock_ids: list, start_date: str,
@@ -365,8 +350,14 @@ def _normalize_price_df(df: pd.DataFrame) -> pd.DataFrame:
 
     # 如果有 MultiIndex columns（yfinance 殘留），先展平
     if isinstance(df.columns, pd.MultiIndex):
-        df.columns = [str(c[-1]) if isinstance(c, tuple) else str(c)
-                      for c in df.columns]
+        flat = []
+        for c in df.columns:
+            if isinstance(c, tuple):
+                parts = [str(x).strip() for x in c if x and str(x).strip()]
+                flat.append(parts[0] if parts else str(c))
+            else:
+                flat.append(str(c))
+        df.columns = flat
 
     df = df.rename(columns={
         "date": "date",
