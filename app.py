@@ -137,12 +137,19 @@ st.markdown("結合 **八大策略** 的綜合選股平台（突破均線/量價
 st.markdown("---")
 
 # 掃描設定
-col_mode, col_industry = st.columns([1, 2])
+col_mode, col_phase, col_industry = st.columns([1, 1, 2])
 with col_mode:
     scan_mode = st.radio(
         "掃描模式",
-        ["快速掃描 (熱門 200 檔)", "完整掃描 (全市場)"],
-        help="快速掃描只分析成交量前 200 大的股票，速度快很多"
+        ["快速掃描", "完整掃描 (全市場)"],
+        help="快速掃描只分析熱門股票，速度快很多"
+    )
+with col_phase:
+    phase_b_limit = st.select_slider(
+        "分析檔數上限",
+        options=[50, 100, 150, 200],
+        value=50,
+        help="Phase B 完整策略分析的最大股票數（影響 API 用量和速度）"
     )
 
 with col_industry:
@@ -205,11 +212,10 @@ elif not _sl_cached.empty and "industry" in _sl_cached.columns:
 elif not _sl_cached.empty:
     _est_stock_count = len(_sl_cached)
 
-# 超過 200 檔會用成交量篩到 200，所以實際下載/分析上限 200
-_est_actual = min(_est_stock_count, 200)
-_est_price_fallback = max(int(_est_actual * 0.1), 5)  # ~10% yfinance miss → FinMind fallback
+_est_actual = min(_est_stock_count, phase_b_limit)
+_est_price_fallback = max(int(_est_actual * 0.1), 5)
 _est_fixed = 5  # stock list + TAIEX + SOX + TSM + night futures
-_est_vol_query = 1 if _est_stock_count > 200 else 0  # 成交量排名查詢
+_est_vol_query = 1 if _est_stock_count > phase_b_limit else 0
 _est_institutional = _est_actual
 _est_margin = _est_actual
 _est_tdcc = _est_actual  # TDCC 集保：每檔 1 call
@@ -298,10 +304,10 @@ if run_btn:
             st.stop()
         status_text.info(f"已篩選 {', '.join(selected_industries)}，共 {len(stock_list)} 檔")
 
-    # 超過 200 檔時，用成交量篩選 TOP 200（節省 API 額度）
+    # 超過上限時，用成交量篩選 TOP N（節省 API 額度）
     target_stocks = stock_list["stock_id"].tolist()
-    if len(target_stocks) > 200:
-        status_text.info(f"共 {len(target_stocks)} 檔，篩選成交量前 200 大...")
+    if len(target_stocks) > phase_b_limit:
+        status_text.info(f"共 {len(target_stocks)} 檔，篩選成交量前 {phase_b_limit} 大...")
         try:
             recent_date = (end_date - timedelta(days=5)).strftime("%Y-%m-%d")
             recent_prices = fetch_stock_prices(start_date=recent_date,
@@ -309,13 +315,13 @@ if run_btn:
             if not recent_prices.empty:
                 latest = recent_prices.sort_values("date").groupby("stock_id").tail(1)
                 latest = latest[latest["stock_id"].isin(target_stocks)]
-                top_vol = latest.nlargest(200, "volume")["stock_id"].tolist()
+                top_vol = latest.nlargest(phase_b_limit, "volume")["stock_id"].tolist()
                 target_stocks = top_vol
         except Exception:
             pass
 
-        if len(target_stocks) > 200:
-            target_stocks = target_stocks[:200]
+        if len(target_stocks) > phase_b_limit:
+            target_stocks = target_stocks[:phase_b_limit]
 
     total_stocks = len(target_stocks)
     status_text.info(f"將分析 {total_stocks} 檔股票")
@@ -397,8 +403,8 @@ if run_btn:
     # ============================================================
     # Step 5: 完整掃描兩階段策略（節省 FinMind API 額度）
     #   Phase A: 用純價量策略（不耗 FinMind）對全部股票初篩
-    #   Phase B: 只對 TOP 200 抓法人/融資/大戶，完整 8 策略評分
-    # 快速掃描（<=200 檔）直接跑 Phase B
+    #   Phase B: 只對 TOP N 抓法人/融資/大戶，完整 8 策略評分
+    # 檔數 <= phase_b_limit 直接跑 Phase B
     # ============================================================
 
     valid_stocks = stock_list[
@@ -407,12 +413,12 @@ if run_btn:
     ]
 
     # 判斷是否需要兩階段
-    need_two_phase = len(valid_stocks) > 200
+    need_two_phase = len(valid_stocks) > phase_b_limit
 
     if need_two_phase:
         # === Phase A: 純價量策略初篩 ===
         progress.progress(58, text=f"Phase A: 價量策略初篩 {len(valid_stocks)} 檔...")
-        status_text.info(f"完整掃描：先用價量策略篩選 {len(valid_stocks)} 檔 → TOP 200")
+        status_text.info(f"完整掃描：先用價量策略篩選 {len(valid_stocks)} 檔 → TOP {phase_b_limit}")
 
         phase_a_scores = []
         total_a = len(valid_stocks)
@@ -472,15 +478,12 @@ if run_btn:
 
             phase_a_scores.append({"stock_id": sid, "preliminary_score": preliminary})
 
-        # 取 TOP 200
         phase_a_df = pd.DataFrame(phase_a_scores)
-        top200_ids = phase_a_df.nlargest(200, "preliminary_score")["stock_id"].tolist()
-
-        # 縮減 valid_stocks 為 TOP 200
-        valid_stocks = valid_stocks[valid_stocks["stock_id"].isin(top200_ids)]
+        top_ids = phase_a_df.nlargest(phase_b_limit, "preliminary_score")["stock_id"].tolist()
+        valid_stocks = valid_stocks[valid_stocks["stock_id"].isin(top_ids)]
         status_text.info(f"初篩完成，從 {total_a} 檔中選出 TOP {len(valid_stocks)} 進入完整分析")
 
-    # === Phase B: 完整 8 策略（只對 <=200 檔抓法人/融資）===
+    # === Phase B: 完整 8 策略 ===
     progress.progress(70, text="下載法人籌碼資料...")
     inst_start = (end_date - timedelta(days=30)).strftime("%Y-%m-%d")
     phase_b_ids = valid_stocks["stock_id"].tolist()
@@ -674,6 +677,16 @@ if run_btn:
     st.session_state["analysis_date"] = end_date_str
     st.session_state["analysis_industries"] = selected_industries
 
+    # 自動存歷史記錄
+    from config.settings import CACHE_DIR
+    _history_dir = CACHE_DIR.parent / "history"
+    _history_dir.mkdir(parents=True, exist_ok=True)
+    _history_file = _history_dir / f"{end_date_str}.parquet"
+    try:
+        ranked.to_parquet(_history_file, index=False)
+    except Exception:
+        pass
+
 # ===== 顯示結果 =====
 if "ranked" in st.session_state:
     ranked = st.session_state["ranked"]
@@ -787,8 +800,8 @@ if "ranked" in st.session_state:
     st.markdown("---")
 
     # Tab 分頁
-    tab_all, tab_ma, tab_vp, tab_rs, tab_inst, tab_et, tab_margin, tab_us, tab_sh = st.tabs([
-        "🏆 綜合排名", "📊 突破均線", "📈 量價齊揚", "💪 相對強弱",
+    tab_all, tab_history, tab_ma, tab_vp, tab_rs, tab_inst, tab_et, tab_margin, tab_us, tab_sh = st.tabs([
+        "🏆 綜合排名", "📅 歷史比對", "📊 突破均線", "📈 量價齊揚", "💪 相對強弱",
         "🏦 法人籌碼", "🔧 技術綜合", "💰 融資融券", "🌏 美股連動", "👥 大戶籌碼"
     ])
 
@@ -834,6 +847,173 @@ if "ranked" in st.session_state:
              "均線分", "量價分", "強弱分", "籌碼分",
              "技術分", "融資融券分", "美股分", "大戶分"]
         )
+
+    with tab_history:
+        st.subheader("📅 歷史比對分析")
+        from config.settings import CACHE_DIR as _H_CACHE
+        import plotly.graph_objects as _hgo
+        _hist_dir = _H_CACHE.parent / "history"
+        _hist_files = sorted(_hist_dir.glob("*.parquet"), reverse=True) if _hist_dir.exists() else []
+
+        if len(_hist_files) < 2:
+            st.info("需要至少 2 天的歷史資料才能比對。每次分析會自動儲存，明天再來看！")
+        else:
+            # 載入最近 N 天歷史
+            _hist_data = {}
+            for f in _hist_files[:30]:  # 最多 30 天
+                _d = f.stem  # date string
+                try:
+                    _hist_data[_d] = pd.read_parquet(f)
+                except Exception:
+                    continue
+
+            _dates = sorted(_hist_data.keys(), reverse=True)
+            _today_key = _dates[0]
+            _yesterday_key = _dates[1] if len(_dates) > 1 else None
+
+            _today_df = _hist_data[_today_key]
+            _yesterday_df = _hist_data[_yesterday_key] if _yesterday_key else pd.DataFrame()
+
+            if not _yesterday_df.empty and "composite_score" in _today_df.columns:
+                _t = _today_df[["stock_id", "name", "composite_score", "grade", "rank"]].copy()
+                _y = _yesterday_df[["stock_id", "composite_score", "grade", "rank"]].copy()
+                _y.columns = ["stock_id", "prev_score", "prev_grade", "prev_rank"]
+                _merged = _t.merge(_y, on="stock_id", how="left")
+                _merged["score_chg"] = (_merged["composite_score"] - _merged["prev_score"]).round(1)
+                _merged["rank_chg"] = (_merged["prev_rank"] - _merged["rank"]).fillna(0).astype(int)
+
+                # --- 新進榜 ---
+                _today_ids = set(_today_df["stock_id"])
+                _yesterday_ids = set(_yesterday_df["stock_id"]) if not _yesterday_df.empty else set()
+                _new_entries = _today_df[_today_df["stock_id"].isin(_today_ids - _yesterday_ids)]
+                if not _new_entries.empty:
+                    st.markdown(f"#### 🆕 新進榜（{len(_new_entries)} 檔）")
+                    _ne = _new_entries[["rank", "stock_id", "name", "composite_score", "grade"]].head(20)
+                    _ne.columns = ["排名", "代碼", "名稱", "綜合分數", "等級"]
+                    st.dataframe(_ne, use_container_width=True, hide_index=True)
+
+                # --- 排名躍升 TOP 10 ---
+                _rank_up = _merged[_merged["rank_chg"] > 0].nlargest(10, "rank_chg")
+                if not _rank_up.empty:
+                    st.markdown("#### 🚀 排名躍升 TOP 10")
+                    _ru = _rank_up[["rank", "stock_id", "name", "composite_score", "rank_chg", "score_chg"]].copy()
+                    _ru.columns = ["今日排名", "代碼", "名稱", "綜合分數", "排名上升", "分數變化"]
+                    st.dataframe(_ru, use_container_width=True, hide_index=True)
+
+                # --- 評級升級 ---
+                _grade_order = {"D": 0, "C": 1, "B": 2, "A": 3, "S": 4}
+                _merged["grade_val"] = _merged["grade"].map(_grade_order)
+                _merged["prev_grade_val"] = _merged["prev_grade"].map(_grade_order)
+                _upgraded = _merged[_merged["grade_val"] > _merged["prev_grade_val"]].dropna(subset=["prev_grade"])
+                if not _upgraded.empty:
+                    st.markdown(f"#### ⬆️ 評級升級（{len(_upgraded)} 檔）")
+                    _ug = _upgraded[["rank", "stock_id", "name", "prev_grade", "grade", "score_chg"]].head(20).copy()
+                    _ug.columns = ["排名", "代碼", "名稱", "前次等級", "現在等級", "分數變化"]
+                    st.dataframe(_ug, use_container_width=True, hide_index=True)
+
+                # --- 連續升溫（需 3+ 天資料）---
+                if len(_dates) >= 3:
+                    _streak_data = {}
+                    for sid in _today_df["stock_id"].tolist()[:200]:
+                        scores = []
+                        for d in _dates[:7]:  # 看最近 7 天
+                            _hdf = _hist_data.get(d)
+                            if _hdf is not None and "composite_score" in _hdf.columns:
+                                row = _hdf[_hdf["stock_id"] == sid]
+                                if not row.empty:
+                                    scores.append(row["composite_score"].iloc[0])
+                                else:
+                                    break
+                            else:
+                                break
+                        if len(scores) >= 3:
+                            # 計算實際連續天數（而非 scores 總長度）
+                            _rise_days = 0
+                            for i in range(len(scores) - 1):
+                                if scores[i] > scores[i + 1]:
+                                    _rise_days += 1
+                                else:
+                                    break
+                            _fall_days = 0
+                            for i in range(len(scores) - 1):
+                                if scores[i] < scores[i + 1]:
+                                    _fall_days += 1
+                                else:
+                                    break
+                            if _rise_days >= 2:
+                                _streak_data[sid] = {
+                                    "trend": "🔥 升溫",
+                                    "days": _rise_days + 1,
+                                    "current": scores[0],
+                                    "change": round(scores[0] - scores[_rise_days], 1),
+                                }
+                            elif _fall_days >= 2:
+                                _streak_data[sid] = {
+                                    "trend": "❄️ 降溫",
+                                    "days": _fall_days + 1,
+                                    "current": scores[0],
+                                    "change": round(scores[0] - scores[_fall_days], 1),
+                                }
+
+                    if _streak_data:
+                        _rising = {k: v for k, v in _streak_data.items() if "升溫" in v["trend"]}
+                        _falling = {k: v for k, v in _streak_data.items() if "降溫" in v["trend"]}
+
+                        if _rising:
+                            st.markdown(f"#### 🔥 連續升溫（{len(_rising)} 檔）")
+                            _rise_rows = []
+                            for sid, info in sorted(_rising.items(), key=lambda x: -x[1]["change"]):
+                                name = _today_df[_today_df["stock_id"] == sid]["name"].iloc[0] if sid in _today_df["stock_id"].values else sid
+                                _chg = info["change"]
+                                _rise_rows.append({"代碼": sid, "名稱": name, "現在分數": info["current"],
+                                                   "累計變化": f"+{_chg}" if _chg > 0 else str(_chg), "連續天數": info["days"]})
+                            st.dataframe(pd.DataFrame(_rise_rows).head(15), use_container_width=True, hide_index=True)
+
+                        if _falling:
+                            st.markdown(f"#### ❄️ 連續降溫（{len(_falling)} 檔）")
+                            _fall_rows = []
+                            for sid, info in sorted(_falling.items(), key=lambda x: x[1]["change"]):
+                                name = _today_df[_today_df["stock_id"] == sid]["name"].iloc[0] if sid in _today_df["stock_id"].values else sid
+                                _chg_f = info["change"]
+                                _fall_rows.append({"代碼": sid, "名稱": name, "現在分數": info["current"],
+                                                   "累計變化": f"{_chg_f}" if _chg_f < 0 else f"-{abs(_chg_f)}", "連續天數": info["days"]})
+                            st.dataframe(pd.DataFrame(_fall_rows).head(15), use_container_width=True, hide_index=True)
+
+                # --- 整體分數趨勢圖 ---
+                if len(_dates) >= 2:
+                    st.markdown("#### 📈 市場平均分數趨勢")
+                    _trend_dates = []
+                    _trend_avg = []
+                    _trend_s_count = []
+                    for d in reversed(_dates[:30]):
+                        _hdf = _hist_data.get(d)
+                        if _hdf is not None and "composite_score" in _hdf.columns:
+                            _trend_dates.append(d)
+                            _trend_avg.append(round(_hdf["composite_score"].mean(), 1))
+                            _trend_s_count.append(len(_hdf[_hdf["grade"] == "S"]) if "grade" in _hdf.columns else 0)
+
+                    if _trend_dates:
+                        _trend_fig = _hgo.Figure()
+                        _trend_fig.add_trace(_hgo.Scatter(
+                            x=_trend_dates, y=_trend_avg,
+                            mode="lines+markers", name="平均分數",
+                            line=dict(color="#00D2FF", width=2),
+                        ))
+                        _trend_fig.add_trace(_hgo.Bar(
+                            x=_trend_dates, y=_trend_s_count,
+                            name="S 級數量", yaxis="y2",
+                            marker_color="rgba(255,215,0,0.5)",
+                        ))
+                        _trend_fig.update_layout(
+                            height=300, template="plotly_dark",
+                            margin=dict(l=50, r=50, t=10, b=30),
+                            yaxis=dict(title="平均分數"),
+                            yaxis2=dict(title="S 級數量", overlaying="y", side="right"),
+                            legend=dict(orientation="h", y=1.1),
+                        )
+                        st.plotly_chart(_trend_fig, use_container_width=True)
+            else:
+                st.info("歷史資料格式不相容或只有一天，無法比對")
 
     with tab_ma:
         st.subheader("突破均線 TOP")

@@ -357,5 +357,72 @@ if stock_id and analyze:
         else:
             st.caption("尚未執行主頁面掃描，無法顯示同產業比較。先到主頁面「開始分析」後再回來。")
 
+        # === 歷史分數趨勢圖 ===
+        from config.settings import CACHE_DIR as _HC
+        import plotly.graph_objects as _htgo
+        _hdir = _HC.parent / "history"
+        if _hdir.exists():
+            _hfiles = sorted(_hdir.glob("*.parquet"), reverse=True)[:30]
+            _hdates, _hscores = [], []
+            _score_keys = {
+                "均線": "ma_breakout_score", "量價": "volume_price_score",
+                "強弱": "relative_strength_score", "法人": "institutional_flow_score",
+                "技術": "enhanced_technical_score", "融資": "margin_analysis_score",
+                "美股": "us_market_score", "大戶": "shareholder_score",
+            }
+            _sub_trends = {k: [] for k in _score_keys}
+
+            for _hf in _hfiles:
+                try:
+                    _hdf = pd.read_parquet(_hf)
+                    _row = _hdf[_hdf["stock_id"] == stock_id]
+                    if not _row.empty and "composite_score" in _hdf.columns:
+                        _hdates.append(_hf.stem)
+                        _hscores.append(_row["composite_score"].iloc[0])
+                        for label, col in _score_keys.items():
+                            _sub_trends[label].append(_row[col].iloc[0] if col in _row.columns else 0)
+                    else:
+                        for label in _score_keys:
+                            _sub_trends[label].append(None)
+                except Exception:
+                    continue
+
+            if len(_hdates) >= 2:
+                st.markdown("---")
+                st.subheader("📈 歷史分數趨勢")
+                _hdates_r = list(reversed(_hdates))
+                _hscores_r = list(reversed(_hscores))
+
+                _hfig = _htgo.Figure()
+                _hfig.add_trace(_htgo.Scatter(
+                    x=_hdates_r, y=_hscores_r,
+                    mode="lines+markers", name="綜合分數",
+                    line=dict(color="#00D2FF", width=3),
+                    marker=dict(size=8),
+                ))
+                for label in _score_keys:
+                    vals = list(reversed(_sub_trends[label]))
+                    if any(v is not None for v in vals):
+                        _hfig.add_trace(_htgo.Scatter(
+                            x=_hdates_r, y=vals,
+                            mode="lines", name=label,
+                            line=dict(width=1, dash="dot"),
+                            opacity=0.6,
+                        ))
+                _hfig.update_layout(
+                    height=350, template="plotly_dark",
+                    margin=dict(l=50, r=20, t=10, b=30),
+                    yaxis=dict(title="分數", range=[0, 100]),
+                    legend=dict(orientation="h", y=-0.15),
+                    hovermode="x unified",
+                )
+                st.plotly_chart(_hfig, use_container_width=True)
+
+                # 分數變化摘要
+                if len(_hscores) >= 2:
+                    _diff = round(_hscores[0] - _hscores[1], 1)
+                    _arrow = "⬆️" if _diff > 0 else ("⬇️" if _diff < 0 else "➡️")
+                    st.caption(f"{_arrow} 較前次分析：{'+' if _diff > 0 else ''}{_diff} 分")
+
 elif not stock_id:
     st.info("請輸入股票代碼開始分析，例如：2330 (台積電)、2317 (鴻海)、2454 (聯發科)")
