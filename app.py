@@ -267,6 +267,18 @@ if run_btn:
     status_text = st.empty()
     token_display = st.empty()
 
+    # 即時 Log 面板
+    _log_lines = []
+    _log_container = st.expander("📋 執行 Log（點開查看詳情）", expanded=False)
+    _log_display = _log_container.empty()
+
+    def _log(msg, level="INFO"):
+        """寫入 log 面板"""
+        from datetime import datetime as _dt
+        prefix = {"INFO": "ℹ️", "WARN": "⚠️", "ERROR": "❌", "OK": "✅"}.get(level, "")
+        _log_lines.append(f"`{_dt.now():%H:%M:%S}` {prefix} {msg}")
+        _log_display.markdown("\n\n".join(_log_lines[-50:]))
+
     # 即時 token 用量追蹤
     _usage_start = check_finmind_usage()
     _usage_start_used = _usage_start["used"] if _usage_start else 0
@@ -287,12 +299,16 @@ if run_btn:
             )
 
     # Step 1: 取得股票清單
+    _log("開始載入股票清單...")
     try:
         stock_list = fetch_stock_list()
         if stock_list.empty:
+            _log("股票清單為空", "ERROR")
             st.error("無法取得股票清單，請確認網路連線或 API Token")
             st.stop()
+        _log(f"股票清單載入完成，共 {len(stock_list)} 檔", "OK")
     except Exception as e:
+        _log(f"股票清單失敗: {e}", "ERROR")
         st.error(f"取得股票清單失敗: {e}")
         st.stop()
 
@@ -300,8 +316,10 @@ if run_btn:
     if selected_industries:
         stock_list = stock_list[stock_list["industry"].isin(selected_industries)].copy()
         if stock_list.empty:
+            _log(f"所選產業無股票: {selected_industries}", "ERROR")
             st.error("所選產業沒有符合的股票")
             st.stop()
+        _log(f"產業篩選完成: {len(stock_list)} 檔 ({', '.join(selected_industries)})", "OK")
         status_text.info(f"已篩選 {', '.join(selected_industries)}，共 {len(stock_list)} 檔")
 
     # 超過上限時，用成交量篩選 TOP N（節省 API 額度）
@@ -332,18 +350,25 @@ if run_btn:
         pct = 5 + int((current / max(total, 1)) * 45)
         progress.progress(min(pct, 50), text=msg)
 
+    _log(f"開始下載 {total_stocks} 檔價量資料 (yfinance → FinMind)...")
     try:
         all_prices = fetch_stock_prices_batch(
             target_stocks, start_date, end_date_str,
             progress_callback=update_progress
         )
         if all_prices.empty:
+            _log("價量資料回傳為空", "ERROR")
             st.error("無法取得價量資料，請稍後再試或檢查 API Token")
             st.stop()
-        status_text.info(f"已下載 {all_prices['stock_id'].nunique()} 檔股票資料")
+        _n_stocks = all_prices['stock_id'].nunique()
+        _log(f"價量資料完成: {_n_stocks} 檔, {len(all_prices)} 筆, "
+             f"欄位={list(all_prices.columns)}", "OK")
+        status_text.info(f"已下載 {_n_stocks} 檔股票資料")
         _update_token_display("價量資料完成")
     except Exception as e:
         import traceback
+        _log(f"價量資料失敗: {e}", "ERROR")
+        _log(f"Traceback: {traceback.format_exc()}", "ERROR")
         st.error(f"取得價量資料失敗: {e}")
         st.code(traceback.format_exc(), language="text")
         st.stop()
@@ -358,22 +383,27 @@ if run_btn:
     tsmc_close = 0.0
     taiex_close = None
 
+    _log("下載美股/大盤資料...")
     try:
         sox_df = fetch_us_stock("^SOX", us_start, end_date_str)
-    except Exception:
-        pass
+        _log(f"費半: {len(sox_df)} 筆", "OK")
+    except Exception as e:
+        _log(f"費半失敗: {e}", "WARN")
     try:
         tsm_df = fetch_us_stock("TSM", us_start, end_date_str)
-    except Exception:
-        pass
+        _log(f"TSM: {len(tsm_df)} 筆", "OK")
+    except Exception as e:
+        _log(f"TSM 失敗: {e}", "WARN")
     try:
         night_df = fetch_night_futures(us_start, end_date_str)
-    except Exception:
-        pass
+        _log(f"夜盤: {len(night_df)} 筆", "OK")
+    except Exception as e:
+        _log(f"夜盤失敗: {e}", "WARN")
     try:
         day_futures_df = fetch_day_futures(us_start, end_date_str)
-    except Exception:
-        pass
+        _log(f"日盤期貨: {len(day_futures_df)} 筆", "OK")
+    except Exception as e:
+        _log(f"日盤期貨失敗: {e}", "WARN")
 
     if not all_prices.empty:
         tsmc_prices = all_prices[all_prices["stock_id"] == "2330"]
@@ -495,12 +525,15 @@ if run_btn:
         pct = 70 + int((current / max(total, 1)) * 8)
         progress.progress(min(pct, 78), text=msg)
 
+    _log(f"下載法人籌碼: {len(phase_b_ids)} 檔...")
     try:
         all_institutional = fetch_institutional_batch(
             phase_b_ids, inst_start, end_date_str,
             progress_callback=update_inst_progress
         )
+        _log(f"法人資料: {len(all_institutional)} 筆", "OK")
     except Exception as e:
+        _log(f"法人資料失敗: {e}", "WARN")
         st.warning(f"法人籌碼資料取得失敗: {e}，該策略將以0分計算")
     _update_token_display("法人資料完成")
 
@@ -510,12 +543,15 @@ if run_btn:
         pct = 78 + int((current / max(total, 1)) * 5)
         progress.progress(min(pct, 83), text=msg)
 
+    _log(f"下載融資融券: {len(phase_b_ids)} 檔...")
     try:
         all_margin = fetch_margin_batch(
             phase_b_ids, inst_start, end_date_str,
             progress_callback=update_margin_progress
         )
+        _log(f"融資融券: {len(all_margin)} 筆", "OK")
     except Exception as e:
+        _log(f"融資融券失敗: {e}", "WARN")
         st.warning(f"融資融券資料取得失敗: {e}，該策略將以0分計算")
     _update_token_display("融資融券完成")
 
@@ -541,17 +577,20 @@ if run_btn:
         price_df = price_df.sort_values("date").reset_index(drop=True)
 
         # 計算各策略分數
+        _stock_errors = []
         try:
             ma_score = ma_strategy.score(price_df)
             ma_detail = ma_strategy.details(price_df)
-        except Exception:
+        except Exception as e:
             ma_score, ma_detail = 0, {"signal": "計算錯誤"}
+            _stock_errors.append(f"均線:{e}")
 
         try:
             vp_score = vp_strategy.score(price_df)
             vp_detail = vp_strategy.details(price_df)
-        except Exception:
+        except Exception as e:
             vp_score, vp_detail = 0, {"signal": "計算錯誤"}
+            _stock_errors.append(f"量價:{e}")
 
         try:
             rs_kwargs = {}
@@ -559,8 +598,9 @@ if run_btn:
                 rs_kwargs["index_close"] = taiex_close
             rs_score = rs_strategy.score(price_df, **rs_kwargs)
             rs_detail = rs_strategy.details(price_df, **rs_kwargs)
-        except Exception:
+        except Exception as e:
             rs_score, rs_detail = 0, {"signal": "計算錯誤"}
+            _stock_errors.append(f"RSI:{e}")
 
         try:
             inst_df = pd.DataFrame()
@@ -571,14 +611,16 @@ if run_btn:
 
             inst_score = inst_strategy.score(price_df, institutional_df=inst_df)
             inst_detail = inst_strategy.details(price_df, institutional_df=inst_df)
-        except Exception:
+        except Exception as e:
             inst_score, inst_detail = 0, {"signal": "計算錯誤"}
+            _stock_errors.append(f"法人:{e}")
 
         try:
             et_score = et_strategy.score(price_df)
             et_detail = et_strategy.details(price_df)
-        except Exception:
+        except Exception as e:
             et_score, et_detail = 0, {"signal": "計算錯誤"}
+            _stock_errors.append(f"技術:{e}")
 
         try:
             margin_df = pd.DataFrame()
@@ -589,8 +631,9 @@ if run_btn:
 
             margin_score = margin_strategy.score(price_df, margin_df=margin_df)
             margin_detail = margin_strategy.details(price_df, margin_df=margin_df)
-        except Exception:
+        except Exception as e:
             margin_score, margin_detail = 0, {"signal": "計算錯誤"}
+            _stock_errors.append(f"融資:{e}")
 
         try:
             us_score = us_strategy.score(
@@ -603,8 +646,9 @@ if run_btn:
                 sox_df=sox_df, tsm_df=tsm_df, tsmc_close=tsmc_close,
                 night_df=night_df, day_futures_df=day_futures_df
             )
-        except Exception:
+        except Exception as e:
             us_score, us_detail = 0, {"signal": "計算錯誤"}
+            _stock_errors.append(f"美股:{e}")
 
         try:
             tdcc_df = fetch_tdcc_holders(sid)
@@ -612,8 +656,12 @@ if run_btn:
             sh_detail = sh_strategy.details(price_df, tdcc_df=tdcc_df)
             if idx % 10 == 9:
                 time.sleep(0.5)
-        except Exception:
+        except Exception as e:
             sh_score, sh_detail = 0, {"signal": "計算錯誤"}
+            _stock_errors.append(f"籌碼:{e}")
+
+        if _stock_errors:
+            _log(f"{sid} {stock.get('name', '')}: {'; '.join(_stock_errors)}", "WARN")
 
         name = stock.get("name", sid)
         industry = stock.get("industry", "")
@@ -666,6 +714,14 @@ if run_btn:
     st.session_state["_base_ranked_for_temp"] = _base_ranked
 
     progress.progress(100, text="完成!")
+
+    # 最終 log 摘要
+    if not ranked.empty:
+        _s = len(ranked[ranked["grade"] == "S"])
+        _a = len(ranked[ranked["grade"] == "A"])
+        _b = len(ranked[ranked["grade"] == "B"])
+        _log(f"分析完成: {len(ranked)} 檔 | S:{_s} A:{_a} B:{_b} | "
+             f"最高 {ranked.iloc[0]['composite_score']:.1f} 分", "OK")
 
     # 最終 token 用量
     _update_token_display("分析完成 ✅")
