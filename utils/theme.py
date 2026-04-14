@@ -118,122 +118,430 @@ h2, h3 { color: #E0E8FF !important; font-weight: 600 !important; }
 """
 
 
-# ============ 主題 2：簡約（黑白灰、極簡） ============
-_THEME_MINIMAL = """
+# ============ 主題 2：賽博龐克（霓虹綠粉 + 掃描線） ============
+_THEME_CYBERPUNK = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
 
-html, body, [class*="css"] {
-    font-family: 'Noto Sans TC', -apple-system, sans-serif;
+@keyframes scanline {
+    0% { transform: translateY(-100%); }
+    100% { transform: translateY(100vh); }
+}
+@keyframes glitch {
+    0%, 100% { text-shadow: 2px 0 #FF0080, -2px 0 #00FFC8; }
+    25% { text-shadow: -2px 0 #FF0080, 2px 0 #00FFC8; }
+    50% { text-shadow: 2px 2px #FF0080, -2px -2px #00FFC8; }
+    75% { text-shadow: -2px 2px #FF0080, 2px -2px #00FFC8; }
+}
+@keyframes neon-flicker {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.85; }
+}
+
+html, body, [class*="css"] { font-family: 'Rajdhani', sans-serif; }
+code, .stCode, pre { font-family: 'Share Tech Mono', monospace !important; color: #00FFC8 !important; }
+
+[data-testid="stAppViewContainer"]::before {
+    content: '';
+    position: fixed; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, #00FFC8, transparent);
+    animation: scanline 6s linear infinite;
+    pointer-events: none; z-index: 9999;
+    box-shadow: 0 0 12px #00FFC8;
 }
 
 h1 {
-    color: #FAFAFA !important;
-    font-weight: 300 !important;
-    letter-spacing: 1px;
-    border-bottom: 1px solid #333;
-    padding-bottom: 0.5rem;
+    font-family: 'Rajdhani', sans-serif !important;
+    color: #00FFC8 !important;
+    font-weight: 700 !important;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    animation: glitch 3s infinite;
+    text-shadow: 0 0 10px #00FFC8, 0 0 20px #00FFC8;
 }
 h2, h3 {
-    color: #D0D0D0 !important;
-    font-weight: 400 !important;
-    letter-spacing: 0.5px;
+    color: #FF0080 !important;
+    font-weight: 600 !important;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    text-shadow: 0 0 8px rgba(255,0,128,0.6);
+    border-left: 3px solid #00FFC8;
+    padding-left: 10px;
 }
 
 [data-testid="stMetric"] {
-    background: transparent;
-    border: 1px solid #2a2a2a;
-    border-radius: 2px;
-    padding: 20px 24px;
-    transition: border-color 0.2s ease;
+    background: rgba(10,0,20,0.7);
+    border: 1px solid #FF0080;
+    border-radius: 0;
+    padding: 18px 22px;
+    position: relative;
+    box-shadow: 0 0 15px rgba(255,0,128,0.3), inset 0 0 15px rgba(0,255,200,0.1);
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
 }
 [data-testid="stMetric"]:hover {
-    border-color: #555;
+    border-color: #00FFC8;
+    box-shadow: 0 0 25px rgba(0,255,200,0.6);
 }
 [data-testid="stMetricLabel"] {
-    color: #888 !important; font-size: 0.75rem !important;
-    font-weight: 400 !important;
-    text-transform: uppercase; letter-spacing: 1.5px;
+    color: #FF0080 !important;
+    font-family: 'Share Tech Mono', monospace !important;
+    font-size: 0.75rem !important;
+    text-transform: uppercase;
+    letter-spacing: 2px;
 }
 [data-testid="stMetricValue"] {
-    color: #FAFAFA !important;
-    font-weight: 300 !important;
-    font-size: 2rem !important;
-    letter-spacing: -0.5px;
+    color: #00FFC8 !important;
+    font-family: 'Share Tech Mono', monospace !important;
+    font-weight: 700 !important;
+    font-size: 1.9rem !important;
+    text-shadow: 0 0 10px #00FFC8;
+    animation: neon-flicker 4s infinite;
 }
 
 [data-testid="stDataFrame"] {
-    border: 1px solid #2a2a2a;
-    border-radius: 2px;
+    border: 1px solid #FF0080;
+    border-radius: 0;
+    box-shadow: 0 0 10px rgba(255,0,128,0.3);
 }
 [data-testid="stDataFrame"] th {
-    background: #1a1a1a !important;
-    color: #AAA !important;
-    font-weight: 500 !important;
-    font-size: 0.8rem !important;
+    background: linear-gradient(90deg, #2a0515, #15052a) !important;
+    color: #00FFC8 !important;
+    font-family: 'Share Tech Mono', monospace !important;
     text-transform: uppercase;
-    letter-spacing: 1px;
-    border-bottom: 1px solid #333 !important;
+    letter-spacing: 1.5px;
+    border-bottom: 2px solid #FF0080 !important;
 }
 [data-testid="stDataFrame"] tr:hover td {
-    background: #1a1a1a !important;
+    background: rgba(255,0,128,0.08) !important;
+    color: #00FFC8 !important;
 }
 
 .stButton > button[kind="primary"] {
-    background: #FAFAFA !important;
-    color: #0E0E0E !important;
-    border: none !important;
-    border-radius: 2px !important;
-    font-weight: 500 !important;
-    padding: 0.6rem 2rem !important;
-    letter-spacing: 1px;
+    background: transparent !important;
+    color: #00FFC8 !important;
+    border: 2px solid #00FFC8 !important;
+    border-radius: 0 !important;
+    font-family: 'Rajdhani', sans-serif !important;
+    font-weight: 700 !important;
+    letter-spacing: 3px;
     text-transform: uppercase;
-    transition: background 0.2s ease !important;
+    padding: 0.6rem 2rem !important;
+    box-shadow: 0 0 15px rgba(0,255,200,0.4), inset 0 0 15px rgba(0,255,200,0.1) !important;
+    clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+    transition: all 0.2s ease !important;
 }
 .stButton > button[kind="primary"]:hover {
-    background: #CCC !important;
-}
-.stButton > button:not([kind="primary"]) {
-    border: 1px solid #444 !important;
-    border-radius: 2px !important;
-    color: #CCC !important;
-    background: transparent !important;
+    background: #00FFC8 !important;
+    color: #0a0015 !important;
+    box-shadow: 0 0 25px #00FFC8 !important;
 }
 
 .stProgress > div > div {
-    background: #FAFAFA !important;
+    background: linear-gradient(90deg, #FF0080, #00FFC8) !important;
+    border-radius: 0 !important;
+    box-shadow: 0 0 10px #00FFC8;
+}
+
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #0a0015 0%, #15052a 100%) !important;
+    border-right: 2px solid #FF0080;
+    box-shadow: inset -5px 0 15px rgba(255,0,128,0.2);
+}
+
+.stTabs [aria-selected="true"] {
+    background: rgba(0,255,200,0.1) !important;
+    color: #00FFC8 !important;
+    border-bottom: 2px solid #00FFC8 !important;
+}
+</style>
+"""
+
+
+# ============ 主題 3：駭客終端（純黑螢光綠、Matrix 雨） ============
+_THEME_MATRIX = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap');
+
+@keyframes matrix-rain {
+    0% { background-position: 0 0; }
+    100% { background-position: 0 1000px; }
+}
+@keyframes terminal-blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+}
+@keyframes scan {
+    0%, 100% { background-position: 0 0; }
+    50% { background-position: 0 4px; }
+}
+
+html, body {
+    background: #000000 !important;
+    font-family: 'Share Tech Mono', monospace !important;
+    color: #00FF41 !important;
+}
+[data-testid="stAppViewContainer"] {
+    background: #000000 !important;
+    background-image:
+        repeating-linear-gradient(0deg,
+            rgba(0,255,65,0.03) 0px,
+            rgba(0,255,65,0.03) 1px,
+            transparent 1px,
+            transparent 3px);
+}
+[data-testid="stAppViewContainer"]::after {
+    content: '';
+    position: fixed; inset: 0;
+    background:
+        radial-gradient(ellipse at top, transparent 0%, rgba(0,0,0,0.4) 100%);
+    pointer-events: none; z-index: 1;
+}
+
+* { font-family: 'Share Tech Mono', monospace !important; color: #00FF41 !important; }
+
+h1 {
+    font-family: 'VT323', monospace !important;
+    color: #00FF41 !important;
+    font-weight: 400 !important;
+    font-size: 3rem !important;
+    letter-spacing: 2px;
+    text-shadow: 0 0 5px #00FF41, 0 0 10px #00FF41;
+}
+h1::before { content: '> '; color: #00FF41; animation: terminal-blink 1s infinite; }
+h1::after { content: '_'; animation: terminal-blink 1s infinite; }
+
+h2, h3 {
+    color: #00FF41 !important;
+    font-family: 'VT323', monospace !important;
+    font-weight: 400 !important;
+    font-size: 1.8rem !important;
+    text-shadow: 0 0 5px #00FF41;
+}
+h2::before, h3::before { content: '[+] '; opacity: 0.7; }
+
+[data-testid="stMetric"] {
+    background: rgba(0,15,0,0.6);
+    border: 1px solid #00FF41;
+    border-radius: 0;
+    padding: 14px 18px;
+    box-shadow: 0 0 8px rgba(0,255,65,0.3), inset 0 0 20px rgba(0,255,65,0.05);
+}
+[data-testid="stMetric"]:hover {
+    box-shadow: 0 0 18px rgba(0,255,65,0.6);
+    background: rgba(0,30,0,0.7);
+}
+[data-testid="stMetricLabel"] {
+    color: #00AA2A !important;
+    font-size: 0.8rem !important;
+    text-transform: uppercase;
+}
+[data-testid="stMetricLabel"]::before { content: '$ '; opacity: 0.6; }
+[data-testid="stMetricValue"] {
+    color: #00FF41 !important;
+    font-family: 'VT323', monospace !important;
+    font-weight: 400 !important;
+    font-size: 2.2rem !important;
+    text-shadow: 0 0 8px #00FF41;
+}
+
+[data-testid="stDataFrame"] {
+    border: 1px solid #00FF41;
+    border-radius: 0;
+    background: #000 !important;
+}
+[data-testid="stDataFrame"] th {
+    background: #001a05 !important;
+    color: #00FF41 !important;
+    text-transform: uppercase;
+    border-bottom: 1px solid #00FF41 !important;
+}
+[data-testid="stDataFrame"] td { color: #00CC33 !important; }
+[data-testid="stDataFrame"] tr:hover td {
+    background: #001a05 !important;
+    color: #00FF41 !important;
+}
+
+.stButton > button {
+    background: #000 !important;
+    color: #00FF41 !important;
+    border: 1px solid #00FF41 !important;
+    border-radius: 0 !important;
+    font-family: 'Share Tech Mono', monospace !important;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    box-shadow: 0 0 8px rgba(0,255,65,0.3) !important;
+}
+.stButton > button:hover {
+    background: #00FF41 !important;
+    color: #000 !important;
+    box-shadow: 0 0 15px #00FF41 !important;
+}
+.stButton > button[kind="primary"]::before { content: '> '; }
+
+.stProgress > div > div {
+    background: #00FF41 !important;
+    box-shadow: 0 0 8px #00FF41;
     border-radius: 0 !important;
 }
 
 [data-testid="stSidebar"] {
-    background: #0a0a0a !important;
-    border-right: 1px solid #222;
-}
-[data-testid="stSidebar"] .stMarkdown hr {
-    border-color: #222 !important;
+    background: #000 !important;
+    border-right: 1px solid #00FF41;
+    box-shadow: inset -3px 0 10px rgba(0,255,65,0.2);
 }
 
-.stTabs [data-baseweb="tab-list"] {
-    gap: 2rem;
-    background: transparent;
-    border-bottom: 1px solid #2a2a2a;
-    padding: 0;
-}
-.stTabs [data-baseweb="tab"] {
-    background: transparent !important;
+input, textarea, select {
+    background: #000 !important;
+    color: #00FF41 !important;
+    border: 1px solid #00FF41 !important;
     border-radius: 0 !important;
-    color: #666 !important;
-    font-weight: 400 !important;
-    padding: 0.5rem 0 !important;
-}
-.stTabs [aria-selected="true"] {
-    color: #FAFAFA !important;
-    border-bottom: 2px solid #FAFAFA !important;
+    font-family: 'Share Tech Mono', monospace !important;
 }
 
-[data-testid="stPlotlyChart"] {
-    border: 1px solid #2a2a2a;
+.stTabs [aria-selected="true"] {
+    background: rgba(0,255,65,0.1) !important;
+    color: #00FF41 !important;
+    border-bottom: 2px solid #00FF41 !important;
+}
+</style>
+"""
+
+
+# ============ 主題 4：血月（深紅黑 + 金） ============
+_THEME_BLOODMOON = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;800&family=Crimson+Text:wght@400;600&display=swap');
+
+@keyframes blood-pulse {
+    0%, 100% { box-shadow: 0 0 15px rgba(180,20,20,0.4), inset 0 0 30px rgba(180,20,20,0.1); }
+    50% { box-shadow: 0 0 35px rgba(220,30,30,0.7), inset 0 0 40px rgba(180,20,20,0.2); }
+}
+@keyframes gold-shimmer {
+    0%, 100% { text-shadow: 0 0 8px rgba(212,175,55,0.5); }
+    50% { text-shadow: 0 0 20px rgba(255,215,80,0.9), 0 0 35px rgba(212,175,55,0.4); }
+}
+
+html, body, [class*="css"] { font-family: 'Crimson Text', serif; }
+
+[data-testid="stAppViewContainer"] {
+    background:
+        radial-gradient(ellipse at top, rgba(80,10,10,0.4) 0%, transparent 60%),
+        radial-gradient(ellipse at bottom, rgba(40,0,0,0.6) 0%, transparent 70%),
+        #0a0000 !important;
+}
+
+h1 {
+    font-family: 'Cinzel', serif !important;
+    color: #D4AF37 !important;
+    font-weight: 800 !important;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    text-align: center;
+    animation: gold-shimmer 3s ease-in-out infinite;
+    border-top: 2px solid #8B0000;
+    border-bottom: 2px solid #8B0000;
+    padding: 1rem 0;
+    background: linear-gradient(180deg, rgba(80,0,0,0.3), transparent, rgba(80,0,0,0.3));
+}
+h2, h3 {
+    font-family: 'Cinzel', serif !important;
+    color: #D4AF37 !important;
+    font-weight: 600 !important;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    text-shadow: 0 0 8px rgba(212,175,55,0.4);
+    border-left: 4px solid #8B0000;
+    padding-left: 12px;
+}
+
+[data-testid="stMetric"] {
+    background: linear-gradient(135deg, rgba(60,0,0,0.8) 0%, rgba(20,0,0,0.9) 100%);
+    border: 1px solid #8B0000;
+    border-radius: 4px;
+    padding: 18px 22px;
+    animation: blood-pulse 4s ease-in-out infinite;
+    position: relative;
+}
+[data-testid="stMetric"]::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, #D4AF37, transparent);
+}
+[data-testid="stMetric"]:hover {
+    border-color: #D4AF37;
+    transform: scale(1.02);
+    transition: all 0.3s ease;
+}
+[data-testid="stMetricLabel"] {
+    color: #D4AF37 !important;
+    font-family: 'Cinzel', serif !important;
+    font-size: 0.8rem !important;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+[data-testid="stMetricValue"] {
+    color: #FFD700 !important;
+    font-family: 'Cinzel', serif !important;
+    font-weight: 800 !important;
+    font-size: 2rem !important;
+    text-shadow: 0 0 12px rgba(255,215,0,0.6), 0 2px 4px rgba(0,0,0,0.8);
+}
+
+[data-testid="stDataFrame"] {
+    border: 1px solid #8B0000;
+    border-radius: 4px;
+    box-shadow: 0 0 15px rgba(139,0,0,0.4);
+}
+[data-testid="stDataFrame"] th {
+    background: linear-gradient(135deg, #3a0000, #1a0000) !important;
+    color: #D4AF37 !important;
+    font-family: 'Cinzel', serif !important;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    border-bottom: 2px solid #8B0000 !important;
+}
+[data-testid="stDataFrame"] td { color: #E8D099 !important; }
+[data-testid="stDataFrame"] tr:hover td {
+    background: rgba(139,0,0,0.2) !important;
+    color: #FFD700 !important;
+}
+
+.stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #8B0000 0%, #4a0000 100%) !important;
+    color: #D4AF37 !important;
+    border: 2px solid #D4AF37 !important;
+    border-radius: 4px !important;
+    font-family: 'Cinzel', serif !important;
+    font-weight: 600 !important;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 0.7rem 2.2rem !important;
+    box-shadow: 0 0 15px rgba(139,0,0,0.5), inset 0 1px 0 rgba(212,175,55,0.3) !important;
+    transition: all 0.3s ease !important;
+}
+.stButton > button[kind="primary"]:hover {
+    background: linear-gradient(135deg, #B22222 0%, #6a0000 100%) !important;
+    box-shadow: 0 0 25px rgba(220,20,60,0.7) !important;
+    transform: translateY(-2px);
+}
+
+.stProgress > div > div {
+    background: linear-gradient(90deg, #8B0000, #D4AF37, #8B0000) !important;
     border-radius: 2px;
+    box-shadow: 0 0 10px rgba(139,0,0,0.6);
+}
+
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #1a0000 0%, #0a0000 100%) !important;
+    border-right: 2px solid #8B0000;
+    box-shadow: inset -5px 0 20px rgba(139,0,0,0.3);
+}
+
+.stTabs [aria-selected="true"] {
+    background: linear-gradient(135deg, rgba(139,0,0,0.4), rgba(212,175,55,0.2)) !important;
+    color: #D4AF37 !important;
+    border-bottom: 2px solid #D4AF37 !important;
 }
 </style>
 """
@@ -422,6 +730,8 @@ h2, h3 {
 
 _THEMES = {
     "科技": _THEME_TECH,
-    "簡約": _THEME_MINIMAL,
     "炫泡": _THEME_FLASHY,
+    "賽博龐克": _THEME_CYBERPUNK,
+    "駭客": _THEME_MATRIX,
+    "血月": _THEME_BLOODMOON,
 }
