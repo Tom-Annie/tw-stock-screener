@@ -48,7 +48,7 @@ tw-stock-screener/
 ├── scripts/
 │   ├── daily_scan.py               # 每日排程掃描 + TG 推播 TOP 10（GitHub Actions）
 │   ├── daily_local.py              # 每日本地分析 50 檔熱門科技股 + 存歷史 + TG 推播
-│   ├── tg_bot.py                   # TG Bot 互動（/scan /stock /top /status）
+│   ├── tg_bot.py                   # TG Bot 互動（/scan /stock /top /status）[Windows Task Scheduler 每 5 分鐘 --once 觸發]
 │   └── test_scan.py                # 掃描流程整合測試（8 項：yfinance/策略/排名）
 │
 ├── .github/workflows/
@@ -199,6 +199,20 @@ Repository Secrets:
   TELEGRAM_BOT_TOKEN
   TELEGRAM_CHAT_ID
 ```
+
+### Windows Task Scheduler（TG Bot 輪詢）
+
+任務名稱：`台股TG Bot`
+頻率：每 5 分鐘
+指令：
+```
+conhost.exe --headless wsl.exe -e bash -c "python3 /mnt/c/Users/User/tw-stock-screener/scripts/tg_bot.py --once >> /tmp/tg_bot.log 2>&1"
+```
+- 以 `conhost --headless` 包裝，避免彈出命令列視窗
+- `tg_bot.py --once` 每次執行一次即退出，非常駐 Bot
+- Log：`/tmp/tg_bot.log`
+
+**規則**：之後若要新增 Windows 端排程呼叫 WSL/CMD/PowerShell，一律採背景無視窗模式（`conhost --headless`、任務設定「不論使用者登入與否均執行」、或改用 WSL cron/systemd timer），不可彈出黑窗。
 
 ### 快取目錄
 ```
