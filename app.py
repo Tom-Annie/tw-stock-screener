@@ -185,6 +185,68 @@ with st.expander("📈 大盤概況", expanded=False):
         _ma_label = f"站上 MA20" if _last_close > _ma20_val else "跌破 MA20"
         mc4.metric("MA20", f"{_ma20_val:,.0f}", delta=_ma_label)
 
+        # ===== 市場廣度：櫃買指數 + 量能 + 漲跌家數 =====
+        @st.cache_data(ttl=300, show_spinner=False)
+        def _load_tpex():
+            from data.fetcher import fetch_tpex_index
+            from datetime import timedelta as _td, datetime as _dt
+            _e = _dt.now().strftime("%Y-%m-%d")
+            _s = (_dt.now() - _td(days=60)).strftime("%Y-%m-%d")
+            return fetch_tpex_index(_s, _e)
+
+        @st.cache_data(ttl=600, show_spinner=False)
+        def _load_breadth():
+            from data.fetcher import fetch_market_breadth_twse
+            from datetime import datetime as _dt, timedelta as _td
+            # 嘗試今日 → 往前 5 天，遇假日回退
+            for _i in range(5):
+                _d = (_dt.now() - _td(days=_i)).strftime("%Y%m%d")
+                _r = fetch_market_breadth_twse(_d)
+                if _r and _r.get("up", 0) + _r.get("down", 0) > 0:
+                    return _r
+            return {}
+
+        _tpex_df = _load_tpex()
+        _breadth = _load_breadth()
+
+        bc1, bc2, bc3, bc4 = st.columns(4)
+
+        # 櫃買指數
+        if not _tpex_df.empty and len(_tpex_df) >= 2:
+            _t_close = _tpex_df["close"].iloc[-1]
+            _t_prev = _tpex_df["close"].iloc[-2]
+            _t_chg = _t_close - _t_prev
+            _t_chg_pct = (_t_chg / _t_prev * 100) if _t_prev else 0
+            bc1.metric("櫃買指數", f"{_t_close:,.2f}",
+                       delta=f"{_t_chg:+.2f} ({_t_chg_pct:+.2f}%)")
+        else:
+            bc1.metric("櫃買指數", "N/A", delta="資料缺")
+
+        # 大盤量能（加權成交量 vs 20日均量）
+        if "volume" in _taiex_df.columns and len(_taiex_df) >= 20:
+            _vol_series = pd.to_numeric(_taiex_df["volume"], errors="coerce")
+            _last_vol = _vol_series.iloc[-1]
+            _vol_ma20 = _vol_series.rolling(20).mean().iloc[-1]
+            _vol_ratio = (_last_vol / _vol_ma20) if _vol_ma20 else 0
+            _vol_label = "爆量" if _vol_ratio >= 1.5 else ("放量" if _vol_ratio >= 1.2 else ("量縮" if _vol_ratio < 0.8 else "均量"))
+            bc2.metric("量比（vs 20MA）", f"{_vol_ratio:.2f}x", delta=_vol_label)
+        else:
+            bc2.metric("量比（vs 20MA）", "N/A")
+
+        # 漲家數 / 跌家數 / 漲跌比
+        if _breadth and (_breadth.get("up", 0) + _breadth.get("down", 0)) > 0:
+            _u = _breadth["up"]
+            _d_cnt = _breadth["down"]
+            _ratio = (_u / _d_cnt) if _d_cnt else 0
+            _breadth_label = "普漲" if _ratio >= 2 else ("多強" if _ratio >= 1.2 else ("空強" if _ratio < 0.8 else "均衡"))
+            bc3.metric("漲 / 跌家數",
+                       f"{_u:,} / {_d_cnt:,}",
+                       delta=f"漲停 {_breadth.get('limit_up',0)} / 跌停 {_breadth.get('limit_down',0)}")
+            bc4.metric("漲跌比 A/D", f"{_ratio:.2f}", delta=_breadth_label)
+        else:
+            bc3.metric("漲 / 跌家數", "N/A", delta="未收盤或資料缺")
+            bc4.metric("漲跌比 A/D", "N/A")
+
         # K 線 + MA 走勢圖
         fig = go.Figure()
         fig.add_trace(go.Candlestick(
