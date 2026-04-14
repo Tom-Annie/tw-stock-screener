@@ -260,21 +260,36 @@ with col_phase:
     )
 
 with col_industry:
-    # 預載產業清單
+    # 預載產業清單（先讀快取，沒快取就立刻抓一次）
     from config.settings import CACHE_DIR
     _industry_list = []
     _ind_cache = CACHE_DIR / "stock_list.parquet"
     _sl_cached = pd.DataFrame()
+
+    @st.cache_data(ttl=3600)
+    def _preload_stock_list():
+        """預載股票清單到記憶體快取（避免每次 rerun 都 API 呼叫）"""
+        from data.fetcher import fetch_stock_list
+        try:
+            return fetch_stock_list()
+        except Exception:
+            return pd.DataFrame()
+
     if _ind_cache.exists():
         try:
             _sl_cached = pd.read_parquet(_ind_cache)
-            if "industry" in _sl_cached.columns:
-                _industry_list = sorted(
-                    i for i in _sl_cached["industry"].dropna().unique()
-                    if i and i not in ("ETF", "存託憑證", "創新板股票", "創新版股票")
-                )
         except Exception:
             pass
+
+    # 快取不存在或沒有 industry 欄位時，直接 API 抓一次
+    if _sl_cached.empty or "industry" not in _sl_cached.columns:
+        _sl_cached = _preload_stock_list()
+
+    if not _sl_cached.empty and "industry" in _sl_cached.columns:
+        _industry_list = sorted(
+            i for i in _sl_cached["industry"].dropna().unique()
+            if i and i not in ("ETF", "存託憑證", "創新板股票", "創新版股票")
+        )
 
     # 科技業快捷預設
     _TECH_INDUSTRIES = [
