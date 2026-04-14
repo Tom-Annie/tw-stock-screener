@@ -12,8 +12,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ===== 科技風格 CSS =====
-from utils.theme import inject_custom_css
+# ===== 主題切換 + CSS 注入 =====
+from utils.theme import inject_custom_css, render_theme_selector
+render_theme_selector()
 inject_custom_css()
 
 # ===== 密碼保護 =====
@@ -137,7 +138,7 @@ st.markdown("結合 **八大策略** 的綜合選股平台（突破均線/量價
 
 # ===== 大盤概況 =====
 with st.expander("📈 大盤概況", expanded=False):
-    @st.cache_data(ttl=3600, show_spinner=False)
+    @st.cache_data(ttl=300, show_spinner=False)
     def _load_taiex():
         from data.fetcher import _fetch_taiex_yfinance
         from datetime import timedelta, datetime as _dt

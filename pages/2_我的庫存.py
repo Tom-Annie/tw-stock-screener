@@ -10,7 +10,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 st.set_page_config(page_title="我的庫存", page_icon="💼", layout="wide")
-from utils.theme import inject_custom_css
+from utils.theme import inject_custom_css, render_theme_selector
+render_theme_selector()
 inject_custom_css()
 from utils.auth import require_auth
 require_auth()

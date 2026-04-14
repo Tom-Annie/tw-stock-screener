@@ -9,7 +9,8 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
 st.set_page_config(page_title="回測驗證", page_icon="📉", layout="wide")
-from utils.theme import inject_custom_css
+from utils.theme import inject_custom_css, render_theme_selector
+render_theme_selector()
 inject_custom_css()
 from utils.auth import require_auth
 require_auth()
