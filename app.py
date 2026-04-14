@@ -584,7 +584,7 @@ if run_btn:
                                   text=f"初篩中... ({idx}/{total_a})")
 
             price_df = all_prices[all_prices["stock_id"] == sid].copy()
-            if len(price_df) < 60:
+            if len(price_df) < 40:  # 降低門檻 60→40 天
                 continue
             price_df = price_df.sort_values("date").reset_index(drop=True)
 
@@ -682,6 +682,7 @@ if run_btn:
     # Step 6: 逐股計算完整 8 策略
     results = []
     total = len(valid_stocks)
+    _skipped_insufficient = []  # 追蹤被跳過的股票
 
     for idx, (_, stock) in enumerate(valid_stocks.iterrows()):
         sid = stock["stock_id"]
@@ -694,7 +695,8 @@ if run_btn:
             _update_token_display(f"策略計算 {idx}/{total}")
 
         price_df = all_prices[all_prices["stock_id"] == sid].copy()
-        if len(price_df) < 60:
+        if len(price_df) < 40:  # 降低門檻 60→40 天（~2 個月）
+            _skipped_insufficient.append((sid, stock.get("name", sid), len(price_df)))
             continue
         price_df = price_df.sort_values("date").reset_index(drop=True)
 
@@ -848,6 +850,15 @@ if run_btn:
         _b = len(ranked[ranked["grade"] == "B"])
         _log(f"分析完成: {len(ranked)} 檔 | S:{_s} A:{_a} B:{_b} | "
              f"最高 {ranked.iloc[0]['composite_score']:.1f} 分", "OK")
+
+    # 顯示被跳過的股票（資料不足 40 天）
+    if _skipped_insufficient:
+        with st.expander(f"⚠️ {len(_skipped_insufficient)} 檔因資料不足被跳過（點擊查看）"):
+            _skip_df = pd.DataFrame(_skipped_insufficient,
+                                     columns=["代碼", "名稱", "實際天數"])
+            _skip_df = _skip_df.sort_values("實際天數")
+            st.dataframe(_skip_df, use_container_width=True, hide_index=True)
+            st.caption("常見原因：新上市未滿 40 交易日、yfinance 抓不到、停牌、下市")
 
     # 最終 token 用量
     _update_token_display("分析完成 ✅")
