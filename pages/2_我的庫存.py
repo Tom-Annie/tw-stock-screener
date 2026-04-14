@@ -30,25 +30,50 @@ def _portfolio_path(username: str) -> Path:
     return PORTFOLIO_DIR / f"{safe_name}.json"
 
 
+def _normalize_portfolio(data: list) -> list:
+    """強制型別統一：shares→int, avg_cost→float，避免 JSON 讀回來型別不一致"""
+    if not isinstance(data, list):
+        return []
+    normalized = []
+    for item in data:
+        if not isinstance(item, dict) or "stock_id" not in item:
+            continue
+        try:
+            item["shares"] = int(float(item.get("shares", 0)))
+        except (ValueError, TypeError):
+            item["shares"] = 0
+        try:
+            item["avg_cost"] = float(item.get("avg_cost", 0.0))
+        except (ValueError, TypeError):
+            item["avg_cost"] = 0.0
+        item["stock_id"] = str(item["stock_id"])
+        item["name"] = str(item.get("name", ""))
+        normalized.append(item)
+    return normalized
+
+
 def _load_portfolio(username: str) -> list:
     """讀取庫存：Gist 優先，本地備援"""
     # 1. 嘗試從 Gist 載入
     if gist_store.is_available():
         data = gist_store.load(username)
         if data:
-            # 同步寫入本地（加速後續讀取）
+            data = _normalize_portfolio(data)
             _save_local(username, data)
             return data
 
     # 2. 本地備援
-    return _load_local(username)
+    return _normalize_portfolio(_load_local(username))
 
 
 def _save_portfolio(username: str, data: list):
     """儲存庫存：同時寫 Gist + 本地"""
+    data = _normalize_portfolio(data)
     _save_local(username, data)
     if gist_store.is_available():
-        gist_store.save(username, data)
+        ok = gist_store.save(username, data)
+        if not ok:
+            st.warning("⚠️ 雲端儲存失敗（本地已儲存），請檢查 GITHUB_TOKEN")
 
 
 def _load_local(username: str) -> list:
@@ -155,15 +180,12 @@ if st.session_state["portfolio"]:
 uploaded = st.sidebar.file_uploader("📤 匯入庫存 (JSON)", type=["json"])
 if uploaded:
     try:
-        data = json.loads(uploaded.read().decode("utf-8"))
-        if isinstance(data, list) and all("stock_id" in item for item in data):
+        raw = json.loads(uploaded.read().decode("utf-8"))
+        if isinstance(raw, list) and all("stock_id" in item for item in raw):
+            data = _normalize_portfolio(raw)
             for item in data:
-                if not item.get("name"):
+                if not item["name"]:
                     item["name"] = _lookup_name(item["stock_id"])
-                if "shares" not in item:
-                    item["shares"] = 0
-                if "avg_cost" not in item:
-                    item["avg_cost"] = 0.0
             st.session_state["portfolio"] = data
             _save_portfolio(username, data)
             # 強制下次 rerun 重新載入，確保資料一致
@@ -220,12 +242,12 @@ for i, holding in enumerate(portfolio):
         to_delete = i
 
     # 更新數值 (有變動時自動存檔)
-    if portfolio[i]["shares"] != int(new_s) or portfolio[i]["avg_cost"] != float(new_c):
-        portfolio[i]["shares"] = int(new_s)
-        portfolio[i]["avg_cost"] = float(new_c)
+    new_s_int = int(new_s)
+    new_c_float = float(new_c)
+    if portfolio[i]["shares"] != new_s_int or portfolio[i]["avg_cost"] != new_c_float:
+        portfolio[i]["shares"] = new_s_int
+        portfolio[i]["avg_cost"] = new_c_float
         _save_portfolio(username, portfolio)
-    portfolio[i]["shares"] = int(new_s)
-    portfolio[i]["avg_cost"] = float(new_c)
 
 if to_delete is not None:
     portfolio.pop(to_delete)
