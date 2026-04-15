@@ -353,6 +353,21 @@ def main():
     # Step 11: TG 推播 + CSV 附件
     _send_telegram_report(ranked, end_date_str, new_entries, exits, history_dir)
 
+    # Step 12: 轉折事件偵測（首次進 S、連日 TOP 20、分數跳升、退出）
+    try:
+        from utils.tg_events import detect_events, format_events_for_tg
+        from utils.telegram_notify import send as _tg_send
+        events = detect_events(ranked, history_dir, end_date_str)
+        print(f"\n  📡 轉折事件：新 S {len(events['new_s'])} | "
+              f"跳升 {len(events['jumps'])} | "
+              f"連日 TOP20 {len(events['streak_top'])} | "
+              f"退出 {len(events['exits'])}")
+        msg = format_events_for_tg(events, end_date_str)
+        if msg:
+            _tg_send(msg)
+    except Exception as e:
+        print(f"  轉折事件偵測失敗: {e}")
+
     print(f"\n[{datetime.now()}] 分析完成！")
 
 
