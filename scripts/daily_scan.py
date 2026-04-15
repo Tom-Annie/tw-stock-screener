@@ -236,6 +236,30 @@ def main():
         step = "排名與統計"
         results.sort(key=lambda x: x["composite"], reverse=True)
 
+        # 7b. 資料品質檢測（卡常數/NaN/低變異 → TG 警報）
+        try:
+            from utils.data_quality import (check_scan_quality, SCORE_COLS,
+                                            format_issues_for_tg)
+            _qc_rows = []
+            for r in results:
+                row = {"stock_id": r["stock_id"]}
+                s = r.get("scores", {})
+                # scores 用的 key（ma_breakout 等）→ ranked 欄位（ma_breakout_score）
+                for k in ["ma_breakout", "volume_price", "relative_strength",
+                          "institutional_flow", "enhanced_technical",
+                          "margin_analysis", "us_market", "shareholder"]:
+                    row[f"{k}_score"] = s.get(k, float("nan"))
+                _qc_rows.append(row)
+            _qc_df = pd.DataFrame(_qc_rows)
+            _qc_issues = check_scan_quality(_qc_df)
+            if _qc_issues:
+                print(f"資料品質異常 {len(_qc_issues)} 項")
+                _tg_msg = format_issues_for_tg(_qc_issues, end_date_str)
+                if _tg_msg:
+                    send_telegram(_tg_msg)
+        except Exception as e:
+            print(f"資料品質檢測本身失敗: {e}")
+
         # 8. 統計
         total = len(results)
         s_count = sum(1 for r in results if r["composite"] > 80)

@@ -314,6 +314,21 @@ def main():
     ranked.to_parquet(history_file, index=False)
     print(f"  已儲存到 {history_file}")
 
+    # 資料品質檢測（卡常數/NaN/低變異 → 印 log + TG 警報）
+    try:
+        from utils.data_quality import check_scan_quality, format_issues_for_tg
+        from utils.telegram_notify import send as _tg_send
+        _qc_issues = check_scan_quality(ranked)
+        if _qc_issues:
+            print(f"  ⚠️ 資料品質異常 {len(_qc_issues)} 項:")
+            for msg in _qc_issues:
+                print(f"    - {msg}")
+            _tg_msg = format_issues_for_tg(_qc_issues, end_date_str)
+            if _tg_msg:
+                _tg_send(_tg_msg)
+    except Exception as e:
+        print(f"  資料品質檢測失敗: {e}")
+
     # Step 9: 顯示 TOP 10
     print(f"\n{'='*60}")
     print(f"  TOP 10 科技股 — {end_date_str}")
