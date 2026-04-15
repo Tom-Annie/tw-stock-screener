@@ -1383,22 +1383,25 @@ def fetch_margin_data(stock_id: str, start_date: str,
 
     df["date"] = pd.to_datetime(df["date"])
 
-    # FinMind 欄位: MarginPurchaseBuy, MarginPurchaseSell, MarginPurchaseLimit,
-    #   ShortSaleBuy, ShortSaleSell, ShortSaleLimit
+    # FinMind 真實欄位：
+    #   MarginPurchaseTodayBalance (融資餘額，策略用)
+    #   MarginPurchaseLimit (融資上限，每檔固定 — 別誤用)
+    #   ShortSaleTodayBalance (融券餘額)
+    # 先比對精確欄名，避免 "Limit" 被當成 balance
     col_map = {}
     for c in df.columns:
         cl = c.lower()
-        if "marginpurchaselimit" in cl or "marginpurchasebalance" in cl:
+        if cl == "marginpurchasetodaybalance" or cl == "marginpurchasebalance":
             col_map[c] = "margin_balance"
-        elif "shortsalelimit" in cl or "shortsalebalance" in cl:
+        elif cl == "shortsaletodaybalance" or cl == "shortsalebalance":
             col_map[c] = "short_balance"
-        elif "marginpurchasebuy" in cl:
+        elif cl == "marginpurchasebuy":
             col_map[c] = "margin_buy"
-        elif "marginpurchasesell" in cl:
+        elif cl == "marginpurchasesell":
             col_map[c] = "margin_sell"
-        elif "shortsalebuy" in cl:
+        elif cl == "shortsalebuy":
             col_map[c] = "short_buy"
-        elif "shortsalesell" in cl:
+        elif cl == "shortsalesell":
             col_map[c] = "short_sell"
 
     if col_map:

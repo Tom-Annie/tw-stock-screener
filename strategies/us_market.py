@@ -158,10 +158,10 @@ class USMarketStrategy(BaseStrategy):
 
     def _night_gap_score(self, night_df: pd.DataFrame,
                          day_df: pd.DataFrame) -> float:
-        """夜盤價差評分"""
+        """夜盤價差評分（30 分量程，缺資料回中性 15）"""
         if (night_df is None or night_df.empty or
                 day_df is None or day_df.empty):
-            return 0.0
+            return 15.0  # 中性，避免缺資料拖累總分
 
         night_df = night_df.sort_values("date")
         day_df = day_df.sort_values("date")
@@ -171,7 +171,7 @@ class USMarketStrategy(BaseStrategy):
         night_close = night_df["close"].iloc[-1]
 
         if pd.isna(day_close) or pd.isna(night_close) or day_close <= 0:
-            return 0.0
+            return 15.0
 
         # 夜盤漲跌幅 = (夜盤收盤 - 日盤收盤) / 日盤收盤
         gap_pct = (night_close - day_close) / day_close * 100
