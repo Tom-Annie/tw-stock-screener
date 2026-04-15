@@ -70,7 +70,8 @@ class MABreakoutStrategy(BaseStrategy):
 
     def details(self, price_df: pd.DataFrame, **kwargs) -> dict:
         if price_df.empty or len(price_df) < max(MA_PERIODS):
-            return {"above_ma": [], "breakout": [], "bullish_alignment": False}
+            return {"above_ma": [], "breakout": [], "bullish_alignment": False,
+                    "signal": "資料不足"}
 
         above_ma, breakout, bullish, ma_values = self._analyze(price_df)
 

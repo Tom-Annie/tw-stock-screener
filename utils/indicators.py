@@ -26,8 +26,12 @@ def rsi(series: pd.Series, period: int = 14) -> pd.Series:
     avg_gain = gain.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
     avg_loss = loss.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
 
+    # avg_loss == 0 時（純上漲）RSI 應為 100 而非 NaN；此 NaN 會讓
+    # RelativeStrengthStrategy 對強勢股悄悄打 0 分
     rs = avg_gain / avg_loss.replace(0, np.nan)
-    return 100 - (100 / (1 + rs))
+    out = 100 - (100 / (1 + rs))
+    out = out.where(avg_loss != 0, 100.0)
+    return out
 
 
 def volume_ratio(volume: pd.Series, period: int = 20) -> pd.Series:
