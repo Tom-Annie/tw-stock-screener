@@ -33,24 +33,23 @@ st.sidebar.markdown("### 策略權重")
 
 # --- 自動權重預設組合 ---
 _AUTO_WEIGHT_PROFILES = {
-    # 過熱：略偏防禦但不閹割動能（動能仍保留 22%）
-    "過熱": {"ma_breakout": 12, "volume_price": 10, "relative_strength": 13,
-             "institutional_flow": 16, "enhanced_technical": 14,
-             "margin_analysis": 10, "us_market": 12, "shareholder": 13},
-    "偏熱": {"ma_breakout": 20, "volume_price": 18, "relative_strength": 15,
-             "institutional_flow": 12, "enhanced_technical": 10,
-             "margin_analysis": 5, "us_market": 10, "shareholder": 10},
-    "溫和": {"ma_breakout": 15, "volume_price": 12, "relative_strength": 15,
-             "institutional_flow": 15, "enhanced_technical": 12,
-             "margin_analysis": 8, "us_market": 10, "shareholder": 13},
-    # 偏冷：適度防禦但保留基本動能（融資從 15 降到 10）
-    "偏冷": {"ma_breakout": 10, "volume_price": 10, "relative_strength": 12,
-             "institutional_flow": 18, "enhanced_technical": 15,
-             "margin_analysis": 10, "us_market": 12, "shareholder": 13},
-    # 極冷：偏價值但不全壓防禦（融資從 18 降到 12）
-    "極冷": {"ma_breakout": 8, "volume_price": 8, "relative_strength": 10,
-             "institutional_flow": 18, "enhanced_technical": 15,
-             "margin_analysis": 12, "us_market": 15, "shareholder": 14},
+    # shareholder 權重皆為 0（FinMind 集保資料拿不到）— 升級後恢復即可
+    # 過熱：略偏防禦但不閹割動能
+    "過熱": {"ma_breakout": 14, "volume_price": 11, "relative_strength": 15,
+             "institutional_flow": 19, "enhanced_technical": 16,
+             "margin_analysis": 11, "us_market": 14, "shareholder": 0},
+    "偏熱": {"ma_breakout": 22, "volume_price": 20, "relative_strength": 17,
+             "institutional_flow": 13, "enhanced_technical": 11,
+             "margin_analysis": 6, "us_market": 11, "shareholder": 0},
+    "溫和": {"ma_breakout": 17, "volume_price": 14, "relative_strength": 17,
+             "institutional_flow": 17, "enhanced_technical": 14,
+             "margin_analysis": 9, "us_market": 12, "shareholder": 0},
+    "偏冷": {"ma_breakout": 11, "volume_price": 11, "relative_strength": 14,
+             "institutional_flow": 21, "enhanced_technical": 18,
+             "margin_analysis": 11, "us_market": 14, "shareholder": 0},
+    "極冷": {"ma_breakout": 9, "volume_price": 9, "relative_strength": 12,
+             "institutional_flow": 22, "enhanced_technical": 17,
+             "margin_analysis": 14, "us_market": 17, "shareholder": 0},
 }
 _WEIGHT_KEYS = ["ma_breakout", "volume_price", "relative_strength",
                 "institutional_flow", "enhanced_technical",
@@ -65,14 +64,15 @@ weight_mode = st.sidebar.radio(
 )
 
 if weight_mode == "手動調整":
-    w1 = st.sidebar.slider("突破均線", 0, 100, 15, key="w1")
-    w2 = st.sidebar.slider("量價齊揚", 0, 100, 12, key="w2")
-    w3 = st.sidebar.slider("相對強弱", 0, 100, 15, key="w3")
-    w4 = st.sidebar.slider("法人籌碼", 0, 100, 15, key="w4")
-    w5 = st.sidebar.slider("技術綜合", 0, 100, 12, key="w5")
-    w6 = st.sidebar.slider("融資融券", 0, 100, 8, key="w6")
-    w7 = st.sidebar.slider("美股連動", 0, 100, 10, key="w7")
-    w8 = st.sidebar.slider("大戶籌碼", 0, 100, 13, key="w8")
+    w1 = st.sidebar.slider("突破均線", 0, 100, 17, key="w1")
+    w2 = st.sidebar.slider("量價齊揚", 0, 100, 14, key="w2")
+    w3 = st.sidebar.slider("相對強弱", 0, 100, 17, key="w3")
+    w4 = st.sidebar.slider("法人籌碼", 0, 100, 17, key="w4")
+    w5 = st.sidebar.slider("技術綜合", 0, 100, 14, key="w5")
+    w6 = st.sidebar.slider("融資融券", 0, 100, 9, key="w6")
+    w7 = st.sidebar.slider("美股連動", 0, 100, 12, key="w7")
+    w8 = st.sidebar.slider("大戶籌碼", 0, 100, 0, key="w8",
+                           help="FinMind 免費帳號拿不到集保資料，預設 0；升級後可調回")
     _raw = [w1, w2, w3, w4, w5, w6, w7, w8]
 else:
     # 自動模式：根據上次分析的市場溫度選擇權重

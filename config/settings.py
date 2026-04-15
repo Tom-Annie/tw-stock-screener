@@ -41,15 +41,17 @@ RSI_BULLISH_HIGH = 70
 PRICE_LOOKBACK_DAYS = 120
 
 # 策略權重 (預設)
+# 註：shareholder 設為 0，因為 FinMind 免費帳號拿不到集保資料，
+#     保留在 0 可避免排名偏差；升級 FinMind 後改回 0.13 即可。
 DEFAULT_WEIGHTS = {
-    "ma_breakout": 0.15,          # 突破均線
-    "volume_price": 0.12,         # 量價齊揚
-    "relative_strength": 0.15,    # 相對強弱
-    "institutional_flow": 0.15,   # 法人籌碼
-    "enhanced_technical": 0.12,   # 技術綜合
-    "margin_analysis": 0.08,      # 融資融券
-    "us_market": 0.10,            # 美股連動
-    "shareholder": 0.13,          # 大戶籌碼
+    "ma_breakout": 0.17,          # 突破均線
+    "volume_price": 0.14,         # 量價齊揚
+    "relative_strength": 0.17,    # 相對強弱
+    "institutional_flow": 0.17,   # 法人籌碼
+    "enhanced_technical": 0.14,   # 技術綜合
+    "margin_analysis": 0.09,      # 融資融券
+    "us_market": 0.12,            # 美股連動
+    "shareholder": 0.00,          # 大戶籌碼（集保資料缺）
 }
 
 # 顯示設定
