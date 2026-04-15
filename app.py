@@ -33,21 +33,24 @@ st.sidebar.markdown("### 策略權重")
 
 # --- 自動權重預設組合 ---
 _AUTO_WEIGHT_PROFILES = {
-    "過熱": {"ma_breakout": 8, "volume_price": 6, "relative_strength": 12,
-             "institutional_flow": 20, "enhanced_technical": 15,
-             "margin_analysis": 18, "us_market": 12, "shareholder": 9},
+    # 過熱：略偏防禦但不閹割動能（動能仍保留 22%）
+    "過熱": {"ma_breakout": 12, "volume_price": 10, "relative_strength": 13,
+             "institutional_flow": 16, "enhanced_technical": 14,
+             "margin_analysis": 10, "us_market": 12, "shareholder": 13},
     "偏熱": {"ma_breakout": 20, "volume_price": 18, "relative_strength": 15,
              "institutional_flow": 12, "enhanced_technical": 10,
              "margin_analysis": 5, "us_market": 10, "shareholder": 10},
     "溫和": {"ma_breakout": 15, "volume_price": 12, "relative_strength": 15,
              "institutional_flow": 15, "enhanced_technical": 12,
              "margin_analysis": 8, "us_market": 10, "shareholder": 13},
-    "偏冷": {"ma_breakout": 8, "volume_price": 8, "relative_strength": 10,
-             "institutional_flow": 20, "enhanced_technical": 18,
-             "margin_analysis": 15, "us_market": 12, "shareholder": 9},
-    "極冷": {"ma_breakout": 5, "volume_price": 5, "relative_strength": 10,
-             "institutional_flow": 20, "enhanced_technical": 15,
-             "margin_analysis": 18, "us_market": 17, "shareholder": 10},
+    # 偏冷：適度防禦但保留基本動能（融資從 15 降到 10）
+    "偏冷": {"ma_breakout": 10, "volume_price": 10, "relative_strength": 12,
+             "institutional_flow": 18, "enhanced_technical": 15,
+             "margin_analysis": 10, "us_market": 12, "shareholder": 13},
+    # 極冷：偏價值但不全壓防禦（融資從 18 降到 12）
+    "極冷": {"ma_breakout": 8, "volume_price": 8, "relative_strength": 10,
+             "institutional_flow": 18, "enhanced_technical": 15,
+             "margin_analysis": 12, "us_market": 15, "shareholder": 14},
 }
 _WEIGHT_KEYS = ["ma_breakout", "volume_price", "relative_strength",
                 "institutional_flow", "enhanced_technical",
@@ -963,6 +966,29 @@ if "ranked" in st.session_state:
     col2.metric("S級 (>80分)", summary.get("s_grade", 0))
     col3.metric("A級 (65-80分)", summary.get("a_grade", 0))
     col4.metric("平均分數", summary.get("avg_composite", 0))
+
+    # ===== 雙權重 S+A% 並列（讓權重造成的落差透明化）=====
+    _base_r = st.session_state.get("_base_ranked_for_temp")
+    _total = len(ranked)
+    if _total > 0 and _base_r is not None and len(_base_r) > 0:
+        _curr_sa = (len(ranked[ranked["grade"].isin(["S", "A"])]) / _total) * 100
+        _base_sa = (len(_base_r[_base_r["grade"].isin(["S", "A"])]) / len(_base_r)) * 100
+        _gap = _curr_sa - _base_sa
+
+        cc1, cc2, cc3 = st.columns(3)
+        cc1.metric("市場原始熱度（固定權重 S+A%）", f"{_base_sa:.0f}%",
+                   help="用預設均衡權重算出，反映市場真實廣度，溫度計也是用這個")
+        cc2.metric("你看到的 S+A%（當前權重）", f"{_curr_sa:.0f}%",
+                   delta=f"{_gap:+.0f}% vs 原始",
+                   delta_color="normal",
+                   help="用你目前側邊欄權重算出，就是下面列表的實際分布")
+        _bias_msg = (
+            "⚖️ 你的權重和均衡相近" if abs(_gap) < 5 else
+            (f"🔼 你的權重「放大」市場熱度 +{_gap:.0f}%（結果比真實廣度更樂觀）"
+             if _gap >= 5 else
+             f"🔽 你的權重「壓縮」市場熱度 {_gap:.0f}%（熱股被降權，列表看起來比市場冷）")
+        )
+        cc3.markdown(f"#### 權重偏向\n{_bias_msg}")
 
     # ===== 市場溫度計（用固定基準權重，避免迴圈偏差）=====
     import plotly.graph_objects as _go
