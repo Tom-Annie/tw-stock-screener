@@ -56,3 +56,33 @@ DEFAULT_WEIGHTS = {
 
 # 顯示設定
 TOP_N_STOCKS = 30  # 預設顯示前 N 檔
+
+# 快取 TTL（集中管理，data/fetcher.py 各處統一引用）
+CACHE_TTL_PRICE_HOURS = 18       # 個股價量、法人、融資 日K 快取
+CACHE_TTL_INDEX_HOURS = 12       # 指數快取（TAIEX / ^TWOII）
+CACHE_TTL_INDEX_SHORT_HOURS = 6  # 短 TTL 指數 / 櫃買
+CACHE_TTL_BREADTH_HOURS = 4      # 漲跌家數
+CACHE_TTL_FUTURES_HOURS = 72     # 期貨
+CACHE_TTL_STOCK_LIST_DAYS = 7    # 股票清單
+
+# 策略最小可用資料天數
+MIN_PRICE_ROWS = 40              # 少於此天數的股票跳過分析
+
+# 自動權重 profile（依市場溫度，sum=100；shareholder=0 因 FinMind 集保缺資料）
+AUTO_WEIGHT_PROFILES = {
+    "過熱": {"ma_breakout": 14, "volume_price": 11, "relative_strength": 15,
+             "institutional_flow": 19, "enhanced_technical": 16,
+             "margin_analysis": 11, "us_market": 14, "shareholder": 0},
+    "偏熱": {"ma_breakout": 22, "volume_price": 20, "relative_strength": 17,
+             "institutional_flow": 13, "enhanced_technical": 11,
+             "margin_analysis": 6, "us_market": 11, "shareholder": 0},
+    "溫和": {"ma_breakout": 17, "volume_price": 14, "relative_strength": 17,
+             "institutional_flow": 17, "enhanced_technical": 14,
+             "margin_analysis": 9, "us_market": 12, "shareholder": 0},
+    "偏冷": {"ma_breakout": 11, "volume_price": 11, "relative_strength": 14,
+             "institutional_flow": 21, "enhanced_technical": 18,
+             "margin_analysis": 11, "us_market": 14, "shareholder": 0},
+    "極冷": {"ma_breakout": 9, "volume_price": 9, "relative_strength": 12,
+             "institutional_flow": 22, "enhanced_technical": 17,
+             "margin_analysis": 14, "us_market": 17, "shareholder": 0},
+}

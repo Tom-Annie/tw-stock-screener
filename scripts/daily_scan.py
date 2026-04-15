@@ -4,7 +4,6 @@
 """
 import os
 import sys
-import requests
 from datetime import datetime, timedelta
 
 # 加入專案根目錄到 path
@@ -13,25 +12,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 # 設定環境變數給 config.settings 讀取
 os.environ["FINMIND_TOKEN"] = os.environ.get("FINMIND_TOKEN", "")
 
+from utils.telegram_notify import send as _tg_send
+
 
 def send_telegram(message: str) -> bool:
-    token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-    chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
-    if not token or not chat_id:
-        print("Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID")
-        return False
-
-    resp = requests.post(
-        f"https://api.telegram.org/bot{token}/sendMessage",
-        json={"chat_id": chat_id, "text": message, "parse_mode": "HTML"},
-        timeout=15,
-    )
-    if resp.status_code == 200:
-        print("Telegram sent OK")
-        return True
-    else:
-        print(f"Telegram error: {resp.status_code} {resp.text}")
-        return False
+    """包一層好記 log（邏輯委派給 utils.telegram_notify.send）"""
+    ok = _tg_send(message)
+    print("Telegram sent OK" if ok else "Telegram send failed")
+    return ok
 
 
 def main():

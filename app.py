@@ -32,25 +32,7 @@ end_date_str = end_date.strftime("%Y-%m-%d")
 st.sidebar.markdown("### 策略權重")
 
 # --- 自動權重預設組合 ---
-_AUTO_WEIGHT_PROFILES = {
-    # shareholder 權重皆為 0（FinMind 集保資料拿不到）— 升級後恢復即可
-    # 過熱：略偏防禦但不閹割動能
-    "過熱": {"ma_breakout": 14, "volume_price": 11, "relative_strength": 15,
-             "institutional_flow": 19, "enhanced_technical": 16,
-             "margin_analysis": 11, "us_market": 14, "shareholder": 0},
-    "偏熱": {"ma_breakout": 22, "volume_price": 20, "relative_strength": 17,
-             "institutional_flow": 13, "enhanced_technical": 11,
-             "margin_analysis": 6, "us_market": 11, "shareholder": 0},
-    "溫和": {"ma_breakout": 17, "volume_price": 14, "relative_strength": 17,
-             "institutional_flow": 17, "enhanced_technical": 14,
-             "margin_analysis": 9, "us_market": 12, "shareholder": 0},
-    "偏冷": {"ma_breakout": 11, "volume_price": 11, "relative_strength": 14,
-             "institutional_flow": 21, "enhanced_technical": 18,
-             "margin_analysis": 11, "us_market": 14, "shareholder": 0},
-    "極冷": {"ma_breakout": 9, "volume_price": 9, "relative_strength": 12,
-             "institutional_flow": 22, "enhanced_technical": 17,
-             "margin_analysis": 14, "us_market": 17, "shareholder": 0},
-}
+from config.settings import AUTO_WEIGHT_PROFILES as _AUTO_WEIGHT_PROFILES
 _WEIGHT_KEYS = ["ma_breakout", "volume_price", "relative_strength",
                 "institutional_flow", "enhanced_technical",
                 "margin_analysis", "us_market", "shareholder"]
@@ -746,6 +728,7 @@ if run_btn:
     progress.progress(83, text="計算完整策略分數...")
 
     # Step 6: 逐股計算完整 8 策略
+    from utils.indicators import volatility_risk  # 迴圈前 import，避免每檔股票重複 import
     results = []
     total = len(valid_stocks)
     _skipped_insufficient = []  # 追蹤被跳過的股票
@@ -863,7 +846,6 @@ if run_btn:
         latest_vol = int(latest_vol)
 
         # 波動率風險指標
-        from utils.indicators import volatility_risk
         try:
             vrisk = volatility_risk(price_df["high"], price_df["low"], price_df["close"])
         except Exception:

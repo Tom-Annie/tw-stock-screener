@@ -1,22 +1,33 @@
 """
-Telegram Bot 推播通知
-需在 Streamlit Secrets 設定：
-  TELEGRAM_BOT_TOKEN = "你的bot token"
-  TELEGRAM_CHAT_ID = "你的chat id"
+Telegram Bot 推播通知 — 統一給 app.py / scripts / GitHub Actions 使用
+
+讀取順序：Streamlit secrets → 環境變數。
+這樣同一個 send() 無論在 Streamlit Cloud、WSL、GitHub Actions 都能用。
+
+設定：
+- Streamlit: .streamlit/secrets.toml 設 TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID
+- Scripts  : export TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID
 """
+import os
 import requests
-import streamlit as st
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}/sendMessage"
 
 
 def _get_config() -> tuple:
+    """先試 Streamlit secrets，再 fallback 環境變數"""
+    token = chat_id = ""
     try:
-        token = st.secrets.get("TELEGRAM_BOT_TOKEN", "")
-        chat_id = st.secrets.get("TELEGRAM_CHAT_ID", "")
-        return token, chat_id
+        import streamlit as st
+        token = st.secrets.get("TELEGRAM_BOT_TOKEN", "") or ""
+        chat_id = st.secrets.get("TELEGRAM_CHAT_ID", "") or ""
     except Exception:
-        return "", ""
+        pass
+    if not token:
+        token = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    if not chat_id:
+        chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
+    return token, chat_id
 
 
 def is_available() -> bool:
@@ -24,8 +35,9 @@ def is_available() -> bool:
     return bool(token and chat_id)
 
 
-def send(message: str) -> bool:
-    """發送 Telegram 通知"""
+def send(message: str, parse_mode: str = "HTML",
+         disable_web_page_preview: bool = True) -> bool:
+    """發送 Telegram 訊息；回傳是否成功"""
     token, chat_id = _get_config()
     if not token or not chat_id:
         return False
@@ -33,9 +45,32 @@ def send(message: str) -> bool:
     try:
         resp = requests.post(
             TELEGRAM_API.format(token=token),
-            json={"chat_id": chat_id, "text": message, "parse_mode": "HTML"},
-            timeout=10,
+            json={
+                "chat_id": chat_id, "text": message,
+                "parse_mode": parse_mode,
+                "disable_web_page_preview": disable_web_page_preview,
+            },
+            timeout=15,
         )
+        return resp.status_code == 200
+    except Exception:
+        return False
+
+
+def send_document(file_path: str, caption: str = "",
+                  filename: str = None, mime: str = "text/csv") -> bool:
+    """發送檔案附件（例如 CSV）"""
+    token, chat_id = _get_config()
+    if not token or not chat_id:
+        return False
+    try:
+        with open(file_path, "rb") as f:
+            resp = requests.post(
+                f"https://api.telegram.org/bot{token}/sendDocument",
+                data={"chat_id": chat_id, "caption": caption},
+                files={"document": (filename or file_path, f, mime)},
+                timeout=30,
+            )
         return resp.status_code == 200
     except Exception:
         return False
@@ -46,17 +81,16 @@ def format_portfolio_alert(results: list) -> str:
     if not results:
         return ""
 
-    dt = __import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M")
+    from datetime import datetime
+    dt = datetime.now().strftime("%Y-%m-%d %H:%M")
     lines = [f"📊 <b>庫存分析通知</b>", f"🕐 {dt}", ""]
 
-    # 需要行動的股票
     action_stocks = []
     for r in results:
         if "error" in r:
             continue
         action = r.get("action", {})
-        color = action.get("color", "")
-        if color in ("red", "blue"):
+        if action.get("color") in ("red", "blue"):
             action_stocks.append(r)
 
     if not action_stocks:
@@ -76,7 +110,6 @@ def format_portfolio_alert(results: list) -> str:
             lines.append(f"   → {act['reason']}")
             lines.append("")
 
-    # 總覽
     valid = [r for r in results if "error" not in r and r.get("avg_cost", 0) > 0]
     if valid:
         total_cost = sum(r["avg_cost"] * r["shares"] for r in valid)

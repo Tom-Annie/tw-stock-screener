@@ -8,7 +8,12 @@ import requests
 from pathlib import Path
 from datetime import datetime, timedelta
 
-from config.settings import FINMIND_TOKEN, CACHE_DIR
+from config.settings import (
+    FINMIND_TOKEN, CACHE_DIR,
+    CACHE_TTL_PRICE_HOURS, CACHE_TTL_INDEX_HOURS,
+    CACHE_TTL_INDEX_SHORT_HOURS, CACHE_TTL_BREADTH_HOURS,
+    CACHE_TTL_FUTURES_HOURS, CACHE_TTL_STOCK_LIST_DAYS,
+)
 
 
 FINMIND_API_URL = "https://api.finmindtrade.com/api/v4/data"
@@ -283,7 +288,7 @@ def fetch_stock_prices_batch(stock_ids: list, start_date: str,
         cache_file = _cache_path("TaiwanStockPrice", params)
         if cache_file.exists():
             mtime = datetime.fromtimestamp(cache_file.stat().st_mtime)
-            if datetime.now() - mtime < timedelta(hours=18):
+            if datetime.now() - mtime < timedelta(hours=CACHE_TTL_PRICE_HOURS):
                 try:
                     all_dfs.append(pd.read_parquet(cache_file))
                     cached_ids.append(sid)
@@ -538,7 +543,7 @@ def fetch_us_stock(ticker: str, start_date: str,
 
     if cache_file.exists():
         mtime = datetime.fromtimestamp(cache_file.stat().st_mtime)
-        if datetime.now() - mtime < timedelta(hours=18):
+        if datetime.now() - mtime < timedelta(hours=CACHE_TTL_PRICE_HOURS):
             return pd.read_parquet(cache_file)
 
     # 優先用 yfinance (免費無限制)
@@ -630,7 +635,7 @@ def fetch_twse_daily(stock_id: str, date_str: str) -> pd.DataFrame:
 
     if cache_file.exists():
         mtime = datetime.fromtimestamp(cache_file.stat().st_mtime)
-        if datetime.now() - mtime < timedelta(hours=18):
+        if datetime.now() - mtime < timedelta(hours=CACHE_TTL_PRICE_HOURS):
             return pd.read_parquet(cache_file)
 
     try:
@@ -691,7 +696,7 @@ def fetch_tpex_daily(stock_id: str, date_str: str) -> pd.DataFrame:
 
     if cache_file.exists():
         mtime = datetime.fromtimestamp(cache_file.stat().st_mtime)
-        if datetime.now() - mtime < timedelta(hours=18):
+        if datetime.now() - mtime < timedelta(hours=CACHE_TTL_PRICE_HOURS):
             return pd.read_parquet(cache_file)
 
     try:
@@ -881,7 +886,7 @@ def _fetch_institutional_twse(stock_id: str, start_date: str,
         day_df = None
         if cache_file.exists():
             mtime = datetime.fromtimestamp(cache_file.stat().st_mtime)
-            if datetime.now() - mtime < timedelta(hours=72):
+            if datetime.now() - mtime < timedelta(hours=CACHE_TTL_FUTURES_HOURS):
                 day_df = pd.read_parquet(cache_file)
 
         if day_df is None:
@@ -962,7 +967,7 @@ def _fetch_margin_twse(stock_id: str, start_date: str,
         day_df = None
         if cache_file.exists():
             mtime = datetime.fromtimestamp(cache_file.stat().st_mtime)
-            if datetime.now() - mtime < timedelta(hours=72):
+            if datetime.now() - mtime < timedelta(hours=CACHE_TTL_FUTURES_HOURS):
                 day_df = pd.read_parquet(cache_file)
 
         if day_df is None:
@@ -1040,7 +1045,7 @@ def _fetch_taiex_yfinance(start_date: str,
 
     if cache_file.exists():
         mtime = datetime.fromtimestamp(cache_file.stat().st_mtime)
-        if datetime.now() - mtime < timedelta(hours=12):
+        if datetime.now() - mtime < timedelta(hours=CACHE_TTL_INDEX_HOURS):
             return pd.read_parquet(cache_file)
 
     try:
@@ -1082,7 +1087,7 @@ def fetch_tpex_index(start_date: str, end_date: str = None) -> pd.DataFrame:
     cache_file = CACHE_DIR / f"tpex_idx_{hashed}.parquet"
     if cache_file.exists():
         mtime = datetime.fromtimestamp(cache_file.stat().st_mtime)
-        if datetime.now() - mtime < timedelta(hours=6):
+        if datetime.now() - mtime < timedelta(hours=CACHE_TTL_INDEX_SHORT_HOURS):
             return pd.read_parquet(cache_file)
 
     try:
@@ -1127,7 +1132,7 @@ def fetch_market_breadth_twse(date_str: str = None) -> dict:
     cache_file = CACHE_DIR / f"breadth_{date_str}.parquet"
     if cache_file.exists():
         mtime = datetime.fromtimestamp(cache_file.stat().st_mtime)
-        if datetime.now() - mtime < timedelta(hours=4):
+        if datetime.now() - mtime < timedelta(hours=CACHE_TTL_BREADTH_HOURS):
             df = pd.read_parquet(cache_file)
             if not df.empty:
                 return df.iloc[0].to_dict()
@@ -1507,7 +1512,7 @@ def fetch_stock_list() -> pd.DataFrame:
 
     if cache_file.exists():
         mtime = datetime.fromtimestamp(cache_file.stat().st_mtime)
-        if datetime.now() - mtime < timedelta(days=7):
+        if datetime.now() - mtime < timedelta(days=CACHE_TTL_STOCK_LIST_DAYS):
             return pd.read_parquet(cache_file)
 
     try:

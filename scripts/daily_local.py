@@ -46,11 +46,9 @@ PHASE_B_LIMIT = 50
 
 def _send_telegram_report(ranked, date_str, new_entries, exits, history_dir):
     """推播 TOP 10 文字訊息 + CSV 附件到 Telegram"""
-    import requests as _req
+    from utils.telegram_notify import is_available, send, send_document
 
-    token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-    chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
-    if not token or not chat_id:
+    if not is_available():
         print("  跳過 TG 推播（未設定 TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID）")
         return
 
@@ -78,23 +76,9 @@ def _send_telegram_report(ranked, date_str, new_entries, exits, history_dir):
     lines.append("")
     lines.append('💡 <a href="https://tw-stock-screener-tom-annie.streamlit.app/">完整排名請到網頁版查看</a>')
 
-    msg = "\n".join(lines)
+    print("  TG 訊息已推播" if send("\n".join(lines)) else "  TG 訊息失敗")
 
-    # 發送文字訊息
-    try:
-        resp = _req.post(
-            f"https://api.telegram.org/bot{token}/sendMessage",
-            json={"chat_id": chat_id, "text": msg, "parse_mode": "HTML"},
-            timeout=15,
-        )
-        if resp.status_code == 200:
-            print("  TG 訊息已推播")
-        else:
-            print(f"  TG 訊息失敗: {resp.status_code}")
-    except Exception as e:
-        print(f"  TG 訊息異常: {e}")
-
-    # 發送 CSV 附件
+    # 寫 CSV 並發附件
     try:
         csv_path = history_dir / f"{date_str}.csv"
         export_cols = ["rank", "stock_id", "name", "industry", "close", "volume",
@@ -106,17 +90,11 @@ def _send_telegram_report(ranked, date_str, new_entries, exits, history_dir):
         avail = [c for c in export_cols if c in ranked.columns]
         ranked[avail].to_csv(csv_path, index=False, encoding="utf-8-sig")
 
-        with open(csv_path, "rb") as f:
-            resp = _req.post(
-                f"https://api.telegram.org/bot{token}/sendDocument",
-                data={"chat_id": chat_id, "caption": f"📎 完整分析結果 {date_str}"},
-                files={"document": (f"台股科技_{date_str}.csv", f, "text/csv")},
-                timeout=30,
-            )
-        if resp.status_code == 200:
-            print("  TG CSV 已傳送")
-        else:
-            print(f"  TG CSV 失敗: {resp.status_code}")
+        ok = send_document(
+            str(csv_path), caption=f"📎 完整分析結果 {date_str}",
+            filename=f"台股科技_{date_str}.csv",
+        )
+        print("  TG CSV 已傳送" if ok else "  TG CSV 失敗")
         csv_path.unlink(missing_ok=True)
     except Exception as e:
         print(f"  TG CSV 異常: {e}")

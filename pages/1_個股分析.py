@@ -13,12 +13,8 @@ render_theme_selector()
 inject_custom_css()
 from utils.auth import require_auth
 require_auth()
+from data.fetcher import lookup_stock_name as _lookup_name
 st.title("🔍 個股深度分析")
-
-# 股票名稱查詢
-def _lookup_name(sid: str) -> str:
-    from data.fetcher import lookup_stock_name
-    return lookup_stock_name(sid)
 
 # 輸入股票代碼
 col_input, col_btn = st.columns([3, 1])

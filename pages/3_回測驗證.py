@@ -18,9 +18,7 @@ st.title("📉 策略回測驗證")
 st.markdown("用歷史資料驗證選股策略的實際表現")
 
 
-def _lookup_name(sid: str) -> str:
-    from data.fetcher import lookup_stock_name
-    return lookup_stock_name(sid)
+from data.fetcher import lookup_stock_name as _lookup_name
 
 
 # 輸入
