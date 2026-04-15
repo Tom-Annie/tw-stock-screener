@@ -17,6 +17,7 @@ tw-stock-screener/
 ├── strategies/                     # 八大評分策略
 │   ├── base.py                     # BaseStrategy 抽象基類（score/details/_clamp）
 │   ├── scorer.py                   # compute_composite_score 加權 + rank_stocks 排名
+│   ├── runner.py                   # score_stock：8 策略 kwargs 映射 + 例外處理集中化
 │   ├── ma_breakout.py              # 策略1：均線突破（MA5/10/20/60 突破+多頭排列）
 │   ├── volume_price.py             # 策略2：量價齊揚（量比+連續天數+量能趨勢）
 │   ├── relative_strength.py        # 策略3：相對強弱（RSI + 個股 vs 大盤超額報酬）
@@ -27,8 +28,16 @@ tw-stock-screener/
 │   ├── shareholder.py              # 策略8：大戶籌碼（集保股權分散表集中度）
 │   └── __init__.py
 │
-├── data/
-│   ├── fetcher.py                  # 資料層：Parquet 快取 → yfinance → FinMind API
+├── data/                            # 資料層：Parquet 快取 → yfinance → FinMind
+│   ├── fetcher.py                   # façade，re-export 8 個子模組保持 import 相容
+│   ├── cache.py                     # Parquet 快取底層（_cache_path / fetch_with_cache）
+│   ├── finmind.py                   # FinMind API 基礎 + quota 監控
+│   ├── prices.py                    # 價量（TWSE / TPEx JSON + yfinance 批次）
+│   ├── institutional.py             # 三大法人買賣超
+│   ├── margin.py                    # 融資融券
+│   ├── index.py                     # TAIEX / 櫃買指數 / 漲跌家數廣度
+│   ├── us_market.py                 # 費半 / TSM / 夜盤/日盤期貨 / 美元台幣
+│   ├── stock_info.py                # 股票清單 / 名稱查詢 / TDCC 集保
 │   └── __init__.py
 │
 ├── utils/

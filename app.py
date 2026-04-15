@@ -429,6 +429,7 @@ if run_btn:
     from strategies.us_market import USMarketStrategy
     from strategies.shareholder import ShareholderStrategy
     from strategies.scorer import rank_stocks, get_strategy_summary
+    from strategies.runner import score_stock as _score_stock
 
     start_date = (end_date - timedelta(days=100)).strftime("%Y-%m-%d")
     is_quick = "快速" in scan_mode
@@ -593,14 +594,22 @@ if run_btn:
     _update_token_display("美股/大盤完成")
 
     # Step 4: 初始化策略
-    ma_strategy = MABreakoutStrategy()
-    vp_strategy = VolumePriceStrategy()
-    rs_strategy = RelativeStrengthStrategy()
-    inst_strategy = InstitutionalFlowStrategy()
-    et_strategy = EnhancedTechnicalStrategy()
-    margin_strategy = MarginAnalysisStrategy()
-    us_strategy = USMarketStrategy()
-    sh_strategy = ShareholderStrategy()
+    _strategies = {
+        "ma_breakout": MABreakoutStrategy(),
+        "volume_price": VolumePriceStrategy(),
+        "relative_strength": RelativeStrengthStrategy(),
+        "institutional_flow": InstitutionalFlowStrategy(),
+        "enhanced_technical": EnhancedTechnicalStrategy(),
+        "margin_analysis": MarginAnalysisStrategy(),
+        "us_market": USMarketStrategy(),
+        "shareholder": ShareholderStrategy(),
+    }
+    _scan_context = {
+        "taiex_close": taiex_close,
+        "sox_df": sox_df, "tsm_df": tsm_df,
+        "night_df": night_df, "day_futures_df": day_futures_df,
+        "tsmc_close": tsmc_close,
+    }
 
     # ============================================================
     # Step 5: 完整掃描兩階段策略（節省 FinMind API 額度）
@@ -749,92 +758,37 @@ if run_btn:
             continue
         price_df = price_df.sort_values("date").reset_index(drop=True)
 
-        # 計算各策略分數
-        _stock_errors = []
+        # 組 per-stock 資料
+        _per_stock = {}
+        if not all_institutional.empty:
+            _per_stock["institutional_df"] = all_institutional[
+                all_institutional["stock_id"] == sid
+            ].copy()
+        if not all_margin.empty:
+            _per_stock["margin_df"] = all_margin[all_margin["stock_id"] == sid].copy()
         try:
-            ma_score = ma_strategy.score(price_df)
-            ma_detail = ma_strategy.details(price_df)
-        except Exception as e:
-            ma_score, ma_detail = 0, {"signal": "計算錯誤"}
-            _stock_errors.append(f"均線:{e}")
+            _per_stock["tdcc_df"] = fetch_tdcc_holders(sid)
+        except Exception:
+            _per_stock["tdcc_df"] = pd.DataFrame()
+        if idx % 10 == 9:
+            time.sleep(0.5)
 
-        try:
-            vp_score = vp_strategy.score(price_df)
-            vp_detail = vp_strategy.details(price_df)
-        except Exception as e:
-            vp_score, vp_detail = 0, {"signal": "計算錯誤"}
-            _stock_errors.append(f"量價:{e}")
+        # 統一呼叫 runner — 8 策略 kwargs 映射、例外處理集中在 strategies/runner.py
+        _out = _score_stock(price_df, _strategies, context=_scan_context,
+                            per_stock=_per_stock, include_details=True)
 
-        try:
-            rs_kwargs = {}
-            if taiex_close is not None and len(taiex_close) >= 20:
-                rs_kwargs["index_close"] = taiex_close
-            rs_score = rs_strategy.score(price_df, **rs_kwargs)
-            rs_detail = rs_strategy.details(price_df, **rs_kwargs)
-        except Exception as e:
-            rs_score, rs_detail = 0, {"signal": "計算錯誤"}
-            _stock_errors.append(f"RSI:{e}")
-
-        try:
-            inst_df = pd.DataFrame()
-            if not all_institutional.empty:
-                inst_df = all_institutional[
-                    all_institutional["stock_id"] == sid
-                ].copy()
-
-            inst_score = inst_strategy.score(price_df, institutional_df=inst_df)
-            inst_detail = inst_strategy.details(price_df, institutional_df=inst_df)
-        except Exception as e:
-            inst_score, inst_detail = 0, {"signal": "計算錯誤"}
-            _stock_errors.append(f"法人:{e}")
-
-        try:
-            et_score = et_strategy.score(price_df)
-            et_detail = et_strategy.details(price_df)
-        except Exception as e:
-            et_score, et_detail = 0, {"signal": "計算錯誤"}
-            _stock_errors.append(f"技術:{e}")
-
-        try:
-            margin_df = pd.DataFrame()
-            if not all_margin.empty:
-                margin_df = all_margin[
-                    all_margin["stock_id"] == sid
-                ].copy()
-
-            margin_score = margin_strategy.score(price_df, margin_df=margin_df)
-            margin_detail = margin_strategy.details(price_df, margin_df=margin_df)
-        except Exception as e:
-            margin_score, margin_detail = 0, {"signal": "計算錯誤"}
-            _stock_errors.append(f"融資:{e}")
-
-        try:
-            us_score = us_strategy.score(
-                price_df,
-                sox_df=sox_df, tsm_df=tsm_df, tsmc_close=tsmc_close,
-                night_df=night_df, day_futures_df=day_futures_df
-            )
-            us_detail = us_strategy.details(
-                price_df,
-                sox_df=sox_df, tsm_df=tsm_df, tsmc_close=tsmc_close,
-                night_df=night_df, day_futures_df=day_futures_df
-            )
-        except Exception as e:
-            us_score, us_detail = 0, {"signal": "計算錯誤"}
-            _stock_errors.append(f"美股:{e}")
-
-        try:
-            tdcc_df = fetch_tdcc_holders(sid)
-            sh_score = sh_strategy.score(price_df, tdcc_df=tdcc_df)
-            sh_detail = sh_strategy.details(price_df, tdcc_df=tdcc_df)
-            if idx % 10 == 9:
-                time.sleep(0.5)
-        except Exception as e:
-            sh_score, sh_detail = 0, {"signal": "計算錯誤"}
-            _stock_errors.append(f"籌碼:{e}")
-
+        _stock_errors = [f"{k}:{v['error']}" for k, v in _out.items() if v["error"]]
         if _stock_errors:
             _log(f"{sid} {stock.get('name', '')}: {'; '.join(_stock_errors)}", "WARN")
+
+        ma_score = _out["ma_breakout"]["score"];             ma_detail = _out["ma_breakout"]["detail"]
+        vp_score = _out["volume_price"]["score"];            vp_detail = _out["volume_price"]["detail"]
+        rs_score = _out["relative_strength"]["score"];       rs_detail = _out["relative_strength"]["detail"]
+        inst_score = _out["institutional_flow"]["score"];    inst_detail = _out["institutional_flow"]["detail"]
+        et_score = _out["enhanced_technical"]["score"];      et_detail = _out["enhanced_technical"]["detail"]
+        margin_score = _out["margin_analysis"]["score"];     margin_detail = _out["margin_analysis"]["detail"]
+        us_score = _out["us_market"]["score"];               us_detail = _out["us_market"]["detail"]
+        sh_score = _out["shareholder"]["score"];             sh_detail = _out["shareholder"]["detail"]
 
         name = stock.get("name", sid)
         industry = stock.get("industry", "")

@@ -118,6 +118,7 @@ def main():
     from strategies.us_market import USMarketStrategy
     from strategies.shareholder import ShareholderStrategy
     from strategies.scorer import rank_stocks
+    from strategies.runner import score_stock
     from config.settings import DEFAULT_WEIGHTS, CACHE_DIR, MIN_PRICE_ROWS
     import time
 
@@ -222,14 +223,22 @@ def main():
 
     # Step 6: 八大策略計算
     print("  計算策略分數...")
-    ma_strategy = MABreakoutStrategy()
-    vp_strategy = VolumePriceStrategy()
-    rs_strategy = RelativeStrengthStrategy()
-    inst_strategy = InstitutionalFlowStrategy()
-    et_strategy = EnhancedTechnicalStrategy()
-    margin_strategy = MarginAnalysisStrategy()
-    us_strategy = USMarketStrategy()
-    sh_strategy = ShareholderStrategy()
+    strategies = {
+        "ma_breakout": MABreakoutStrategy(),
+        "volume_price": VolumePriceStrategy(),
+        "relative_strength": RelativeStrengthStrategy(),
+        "institutional_flow": InstitutionalFlowStrategy(),
+        "enhanced_technical": EnhancedTechnicalStrategy(),
+        "margin_analysis": MarginAnalysisStrategy(),
+        "us_market": USMarketStrategy(),
+        "shareholder": ShareholderStrategy(),
+    }
+    context = {
+        "taiex_close": taiex_close,
+        "sox_df": sox_df, "tsm_df": tsm_df,
+        "night_df": night_df, "day_futures_df": day_futures_df,
+        "tsmc_close": tsmc_close,
+    }
 
     valid_stocks = stock_list[
         stock_list["stock_id"].isin(target_stocks) &
@@ -248,42 +257,23 @@ def main():
             continue
         price_df = price_df.sort_values("date").reset_index(drop=True)
 
-        def _safe_score(fn, **kw):
-            try:
-                return fn(price_df, **kw)
-            except Exception:
-                return 0
-
-        def _safe_detail(fn, **kw):
-            try:
-                return fn(price_df, **kw)
-            except Exception:
-                return {"signal": ""}
-
-        rs_kwargs = {}
-        if taiex_close is not None and len(taiex_close) >= 20:
-            rs_kwargs["index_close"] = taiex_close
-
-        inst_df = all_institutional[all_institutional["stock_id"] == sid].copy() if not all_institutional.empty else pd.DataFrame()
-        margin_df = all_margin[all_margin["stock_id"] == sid].copy() if not all_margin.empty else pd.DataFrame()
+        per_stock = {}
+        if not all_institutional.empty:
+            per_stock["institutional_df"] = all_institutional[
+                all_institutional["stock_id"] == sid
+            ].copy()
+        if not all_margin.empty:
+            per_stock["margin_df"] = all_margin[all_margin["stock_id"] == sid].copy()
 
         try:
-            tdcc_df = fetch_tdcc_holders(sid)
+            per_stock["tdcc_df"] = fetch_tdcc_holders(sid)
         except Exception:
-            tdcc_df = pd.DataFrame()
+            per_stock["tdcc_df"] = pd.DataFrame()
         if idx % 10 == 9:
             time.sleep(0.5)
 
-        ma_score = _safe_score(ma_strategy.score)
-        vp_score = _safe_score(vp_strategy.score)
-        rs_score = _safe_score(rs_strategy.score, **rs_kwargs)
-        inst_score = _safe_score(inst_strategy.score, institutional_df=inst_df)
-        et_score = _safe_score(et_strategy.score)
-        margin_score = _safe_score(margin_strategy.score, margin_df=margin_df)
-        us_score = _safe_score(us_strategy.score, sox_df=sox_df, tsm_df=tsm_df,
-                               tsmc_close=tsmc_close, night_df=night_df,
-                               day_futures_df=day_futures_df)
-        sh_score = _safe_score(sh_strategy.score, tdcc_df=tdcc_df)
+        out = score_stock(price_df, strategies, context=context,
+                          per_stock=per_stock, include_details=True)
 
         results.append({
             "stock_id": sid,
@@ -291,24 +281,22 @@ def main():
             "industry": stock.get("industry", ""),
             "close": round(price_df["close"].iloc[-1], 2),
             "volume": int(price_df["volume"].iloc[-1]) if pd.notna(price_df["volume"].iloc[-1]) else 0,
-            "ma_breakout_score": round(ma_score, 1),
-            "volume_price_score": round(vp_score, 1),
-            "relative_strength_score": round(rs_score, 1),
-            "institutional_flow_score": round(inst_score, 1),
-            "enhanced_technical_score": round(et_score, 1),
-            "margin_analysis_score": round(margin_score, 1),
-            "us_market_score": round(us_score, 1),
-            "shareholder_score": round(sh_score, 1),
-            "ma_signal": _safe_detail(ma_strategy.details).get("signal", ""),
-            "vp_signal": _safe_detail(vp_strategy.details).get("signal", ""),
-            "rs_signal": _safe_detail(rs_strategy.details, **rs_kwargs).get("signal", ""),
-            "inst_signal": _safe_detail(inst_strategy.details, institutional_df=inst_df).get("signal", ""),
-            "et_signal": _safe_detail(et_strategy.details).get("signal", ""),
-            "margin_signal": _safe_detail(margin_strategy.details, margin_df=margin_df).get("signal", ""),
-            "us_signal": _safe_detail(us_strategy.details, sox_df=sox_df, tsm_df=tsm_df,
-                                      tsmc_close=tsmc_close, night_df=night_df,
-                                      day_futures_df=day_futures_df).get("signal", ""),
-            "sh_signal": _safe_detail(sh_strategy.details, tdcc_df=tdcc_df).get("signal", ""),
+            "ma_breakout_score": round(out["ma_breakout"]["score"], 1),
+            "volume_price_score": round(out["volume_price"]["score"], 1),
+            "relative_strength_score": round(out["relative_strength"]["score"], 1),
+            "institutional_flow_score": round(out["institutional_flow"]["score"], 1),
+            "enhanced_technical_score": round(out["enhanced_technical"]["score"], 1),
+            "margin_analysis_score": round(out["margin_analysis"]["score"], 1),
+            "us_market_score": round(out["us_market"]["score"], 1),
+            "shareholder_score": round(out["shareholder"]["score"], 1),
+            "ma_signal": out["ma_breakout"]["detail"].get("signal", ""),
+            "vp_signal": out["volume_price"]["detail"].get("signal", ""),
+            "rs_signal": out["relative_strength"]["detail"].get("signal", ""),
+            "inst_signal": out["institutional_flow"]["detail"].get("signal", ""),
+            "et_signal": out["enhanced_technical"]["detail"].get("signal", ""),
+            "margin_signal": out["margin_analysis"]["detail"].get("signal", ""),
+            "us_signal": out["us_market"]["detail"].get("signal", ""),
+            "sh_signal": out["shareholder"]["detail"].get("signal", ""),
         })
 
     if not results:

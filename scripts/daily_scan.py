@@ -42,6 +42,7 @@ def main():
         from strategies.us_market import USMarketStrategy
         from strategies.shareholder import ShareholderStrategy
         from strategies.scorer import compute_composite_score
+        from strategies.runner import score_stock
         from config.settings import DEFAULT_WEIGHTS, MIN_PRICE_ROWS
         import time
 
@@ -183,6 +184,13 @@ def main():
             stock_list["stock_id"].isin(all_prices["stock_id"].unique())
         ]
 
+        context = {
+            "taiex_close": taiex_close,
+            "sox_df": sox_df, "tsm_df": tsm_df,
+            "night_df": night_df, "day_futures_df": day_futures_df,
+            "tsmc_close": tsmc_close,
+        }
+
         results = []
         for idx, (_, stock) in enumerate(valid_stocks.iterrows()):
             sid = stock["stock_id"]
@@ -191,33 +199,18 @@ def main():
                 continue
             price_df = price_df.sort_values("date").reset_index(drop=True)
 
-            scores = {}
-            for key, strat in strategies.items():
-                try:
-                    kwargs = {}
-                    if key == "institutional_flow" and not all_institutional.empty:
-                        kwargs["institutional_df"] = all_institutional[
-                            all_institutional["stock_id"] == sid
-                        ].copy()
-                    elif key == "margin_analysis" and not all_margin.empty:
-                        kwargs["margin_df"] = all_margin[
-                            all_margin["stock_id"] == sid
-                        ].copy()
-                    elif key == "shareholder" and not all_tdcc.empty:
-                        kwargs["tdcc_df"] = all_tdcc[
-                            all_tdcc["stock_id"] == sid
-                        ].copy()
-                    elif key == "relative_strength":
-                        if taiex_close is not None and len(taiex_close) >= 20:
-                            kwargs["index_close"] = taiex_close
-                    elif key == "us_market":
-                        kwargs.update(
-                            sox_df=sox_df, tsm_df=tsm_df, tsmc_close=tsmc_close,
-                            night_df=night_df, day_futures_df=day_futures_df
-                        )
-                    scores[key] = strat.score(price_df, **kwargs)
-                except Exception:
-                    scores[key] = 0
+            per_stock = {}
+            if not all_institutional.empty:
+                per_stock["institutional_df"] = all_institutional[
+                    all_institutional["stock_id"] == sid
+                ].copy()
+            if not all_margin.empty:
+                per_stock["margin_df"] = all_margin[all_margin["stock_id"] == sid].copy()
+            if not all_tdcc.empty:
+                per_stock["tdcc_df"] = all_tdcc[all_tdcc["stock_id"] == sid].copy()
+
+            out = score_stock(price_df, strategies, context=context, per_stock=per_stock)
+            scores = {k: v["score"] for k, v in out.items()}
 
             # Use daily_weights (margin_analysis=0, shareholder=0) so skipped
             # strategies don't distort the composite score
