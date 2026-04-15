@@ -32,7 +32,7 @@ end_date_str = end_date.strftime("%Y-%m-%d")
 st.sidebar.markdown("### 策略權重")
 
 # --- 自動權重預設組合 ---
-from config.settings import AUTO_WEIGHT_PROFILES as _AUTO_WEIGHT_PROFILES
+from config.settings import AUTO_WEIGHT_PROFILES as _AUTO_WEIGHT_PROFILES, MIN_PRICE_ROWS
 _WEIGHT_KEYS = ["ma_breakout", "volume_price", "relative_strength",
                 "institutional_flow", "enhanced_technical",
                 "margin_analysis", "us_market", "shareholder"]
@@ -632,7 +632,7 @@ if run_btn:
                                   text=f"初篩中... ({idx}/{total_a})")
 
             price_df = all_prices[all_prices["stock_id"] == sid].copy()
-            if len(price_df) < 40:  # 降低門檻 60→40 天
+            if len(price_df) < MIN_PRICE_ROWS:
                 continue
             price_df = price_df.sort_values("date").reset_index(drop=True)
 
@@ -744,7 +744,7 @@ if run_btn:
             _update_token_display(f"策略計算 {idx}/{total}")
 
         price_df = all_prices[all_prices["stock_id"] == sid].copy()
-        if len(price_df) < 40:  # 降低門檻 60→40 天（~2 個月）
+        if len(price_df) < MIN_PRICE_ROWS:
             _skipped_insufficient.append((sid, stock.get("name", sid), len(price_df)))
             continue
         price_df = price_df.sort_values("date").reset_index(drop=True)

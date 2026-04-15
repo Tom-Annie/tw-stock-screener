@@ -118,7 +118,7 @@ def main():
     from strategies.us_market import USMarketStrategy
     from strategies.shareholder import ShareholderStrategy
     from strategies.scorer import rank_stocks
-    from config.settings import DEFAULT_WEIGHTS, CACHE_DIR
+    from config.settings import DEFAULT_WEIGHTS, CACHE_DIR, MIN_PRICE_ROWS
     import time
 
     end_date = datetime.now()
@@ -244,7 +244,7 @@ def main():
             print(f"  分析中... ({idx}/{total}) {sid}")
 
         price_df = all_prices[all_prices["stock_id"] == sid].copy()
-        if len(price_df) < 60:
+        if len(price_df) < MIN_PRICE_ROWS:
             continue
         price_df = price_df.sort_values("date").reset_index(drop=True)
 

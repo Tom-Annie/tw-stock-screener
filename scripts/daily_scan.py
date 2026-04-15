@@ -42,7 +42,7 @@ def main():
         from strategies.us_market import USMarketStrategy
         from strategies.shareholder import ShareholderStrategy
         from strategies.scorer import compute_composite_score
-        from config.settings import DEFAULT_WEIGHTS
+        from config.settings import DEFAULT_WEIGHTS, MIN_PRICE_ROWS
         import time
 
         # --- Daily scan weights ---
@@ -92,33 +92,16 @@ def main():
 
         print(f"將分析 {len(target_stocks)} 檔")
 
-        # 3. 下載價量資料（只用 FinMind，跳過慢速 TWSE fallback）
+        # 3. 下載價量資料（批次，yfinance 優先，自帶快取與 rate limit 管理）
         step = "下載價量資料"
-        from data.fetcher import fetch_with_cache, _normalize_price_df
-        import time as _time
-
         print("下載價量資料...")
-        price_dfs = []
-        for i, sid in enumerate(target_stocks):
-            try:
-                params = {"data_id": sid, "start_date": start_date, "end_date": end_date_str}
-                df = fetch_with_cache("TaiwanStockPrice", params, ttl_hours=18)
-                if not df.empty:
-                    price_dfs.append(df)
-            except Exception:
-                continue
-            if i % 50 == 49:
-                _time.sleep(0.3)
-                print(f"  價量 {i+1}/{len(target_stocks)}")
-
-        if not price_dfs:
+        all_prices = fetch_stock_prices_batch(target_stocks, start_date, end_date_str)
+        if all_prices.empty:
             send_telegram("⚠️ 每日掃描失敗：無法取得價量資料")
             return
-
-        all_prices = _normalize_price_df(pd.concat(price_dfs, ignore_index=True))
         print(f"已下載 {all_prices['stock_id'].nunique()} 檔價量資料")
 
-        # 4. 下載法人/融資（只用 FinMind，失敗就跳過）
+        # 4. 下載法人資料（批次）
         step = "下載法人資料"
         inst_start = (end_date - timedelta(days=30)).strftime("%Y-%m-%d")
         fetched_ids = all_prices["stock_id"].unique().tolist()
@@ -126,22 +109,10 @@ def main():
         all_institutional = pd.DataFrame()
         print("下載法人資料...")
         try:
-            from data.fetcher import fetch_institutional_investors
-            inst_dfs = []
-            for i, sid in enumerate(fetched_ids):
-                try:
-                    params = {"data_id": sid, "start_date": inst_start, "end_date": end_date_str}
-                    df = fetch_with_cache("TaiwanStockInstitutionalInvestorsBuySell", params)
-                    if not df.empty:
-                        from data.fetcher import _parse_institutional_df
-                        inst_dfs.append(_parse_institutional_df(df))
-                except Exception:
-                    continue
-                if i % 30 == 29:
-                    _time.sleep(0.3)
-            if inst_dfs:
-                all_institutional = pd.concat(inst_dfs, ignore_index=True)
-            print(f"法人資料 {len(inst_dfs)} 檔")
+            all_institutional = fetch_institutional_batch(
+                fetched_ids, inst_start, end_date_str
+            )
+            print(f"法人資料 {all_institutional['stock_id'].nunique() if not all_institutional.empty else 0} 檔")
         except Exception as e:
             print(f"法人資料失敗: {e}")
 
@@ -216,7 +187,7 @@ def main():
         for idx, (_, stock) in enumerate(valid_stocks.iterrows()):
             sid = stock["stock_id"]
             price_df = all_prices[all_prices["stock_id"] == sid].copy()
-            if len(price_df) < 60:
+            if len(price_df) < MIN_PRICE_ROWS:
                 continue
             price_df = price_df.sort_values("date").reset_index(drop=True)
 
