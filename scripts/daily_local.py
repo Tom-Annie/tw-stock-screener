@@ -175,37 +175,30 @@ def main():
     tsmc_close = 0.0
     taiex_close = None
 
-    try:
-        sox_df = fetch_us_stock("^SOX", us_start, end_date_str)
-    except Exception:
-        pass
-    try:
-        tsm_df = fetch_us_stock("TSM", us_start, end_date_str)
-    except Exception:
-        pass
-    try:
-        night_df = fetch_night_futures(us_start, end_date_str)
-    except Exception:
-        pass
-    try:
-        day_futures_df = fetch_day_futures(us_start, end_date_str)
-    except Exception:
-        pass
+    from utils.parallel_fetch import parallel_fetch
+    _fetched = parallel_fetch({
+        "sox":   (fetch_us_stock,      ("^SOX", us_start, end_date_str)),
+        "tsm":   (fetch_us_stock,      ("TSM",  us_start, end_date_str)),
+        "night": (fetch_night_futures, (us_start, end_date_str)),
+        "day":   (fetch_day_futures,   (us_start, end_date_str)),
+        "taiex": (fetch_taiex,         (start_date, end_date_str)),
+    })
+    sox_df = _fetched["sox"]
+    tsm_df = _fetched["tsm"]
+    night_df = _fetched["night"]
+    day_futures_df = _fetched["day"]
 
     tsmc_prices = all_prices[all_prices["stock_id"] == "2330"]
     if not tsmc_prices.empty:
         tsmc_close = tsmc_prices.sort_values("date")["close"].iloc[-1]
 
-    try:
-        taiex_df = fetch_taiex(start_date, end_date_str)
-        if not taiex_df.empty:
-            taiex_df = taiex_df.sort_values("date")
-            if "close" in taiex_df.columns:
-                taiex_close = taiex_df["close"]
-            elif "price" in taiex_df.columns:
-                taiex_close = taiex_df["price"]
-    except Exception:
-        pass
+    taiex_df = _fetched["taiex"]
+    if not taiex_df.empty:
+        taiex_df = taiex_df.sort_values("date")
+        if "close" in taiex_df.columns:
+            taiex_close = taiex_df["close"]
+        elif "price" in taiex_df.columns:
+            taiex_close = taiex_df["price"]
 
     # Step 5: 法人 + 融資
     print("  下載法人/融資資料...")

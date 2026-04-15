@@ -125,45 +125,37 @@ def main():
         all_tdcc = pd.DataFrame()
         print("跳過 TDCC 集保資料（節省 API quota，weight=0）")
 
-        # 5. 美股/夜盤/大盤
+        # 5. 美股/夜盤/大盤（並行下載）
         step = "下載美股/夜盤/大盤"
         us_start = (end_date - timedelta(days=40)).strftime("%Y-%m-%d")
-        sox_df = tsm_df = night_df = day_futures_df = pd.DataFrame()
         tsmc_close = 0.0
         taiex_close = None
 
-        try:
-            sox_df = fetch_us_stock("^SOX", us_start, end_date_str)
-        except Exception:
-            pass
-        try:
-            tsm_df = fetch_us_stock("TSM", us_start, end_date_str)
-        except Exception:
-            pass
-        try:
-            night_df = fetch_night_futures(us_start, end_date_str)
-        except Exception:
-            pass
-        try:
-            day_futures_df = fetch_day_futures(us_start, end_date_str)
-        except Exception:
-            pass
+        from utils.parallel_fetch import parallel_fetch
+        _fetched = parallel_fetch({
+            "sox":   (fetch_us_stock,      ("^SOX", us_start, end_date_str)),
+            "tsm":   (fetch_us_stock,      ("TSM",  us_start, end_date_str)),
+            "night": (fetch_night_futures, (us_start, end_date_str)),
+            "day":   (fetch_day_futures,   (us_start, end_date_str)),
+            "taiex": (fetch_taiex,         (start_date, end_date_str)),
+        })
+        sox_df = _fetched["sox"]
+        tsm_df = _fetched["tsm"]
+        night_df = _fetched["night"]
+        day_futures_df = _fetched["day"]
 
         if not all_prices.empty:
             tsmc = all_prices[all_prices["stock_id"] == "2330"]
             if not tsmc.empty:
                 tsmc_close = tsmc.sort_values("date")["close"].iloc[-1]
 
-        try:
-            taiex_df = fetch_taiex(start_date, end_date_str)
-            if not taiex_df.empty:
-                taiex_df = taiex_df.sort_values("date")
-                if "close" in taiex_df.columns:
-                    taiex_close = taiex_df["close"]
-                elif "price" in taiex_df.columns:
-                    taiex_close = taiex_df["price"]
-        except Exception:
-            pass
+        taiex_df = _fetched["taiex"]
+        if not taiex_df.empty:
+            taiex_df = taiex_df.sort_values("date")
+            if "close" in taiex_df.columns:
+                taiex_close = taiex_df["close"]
+            elif "price" in taiex_df.columns:
+                taiex_close = taiex_df["price"]
 
         # 6. 計算策略分數（全部 8 個策略）
         step = "計算策略分數"
