@@ -58,11 +58,12 @@ DEFAULT_WEIGHTS = {
 TOP_N_STOCKS = 30  # 預設顯示前 N 檔
 
 # 快取 TTL（集中管理，data/fetcher.py 各處統一引用）
-CACHE_TTL_PRICE_HOURS = 18       # 個股價量、法人、融資 日K 快取
-CACHE_TTL_INDEX_HOURS = 12       # 指數快取（TAIEX / ^TWOII）
-CACHE_TTL_INDEX_SHORT_HOURS = 6  # 短 TTL 指數 / 櫃買
-CACHE_TTL_BREADTH_HOURS = 4      # 漲跌家數
-CACHE_TTL_FUTURES_HOURS = 72     # 期貨
+# 註:cache.py 另有「資料截止日 ≥ 最近交易日」的新鮮度檢查作為第二道保險
+CACHE_TTL_PRICE_HOURS = 3        # 個股價量、法人、融資 日K 快取(盤後 ~3 小時內有效)
+CACHE_TTL_INDEX_HOURS = 3        # 指數快取（TAIEX / ^TWOII）
+CACHE_TTL_INDEX_SHORT_HOURS = 1  # 短 TTL 指數 / 櫃買
+CACHE_TTL_BREADTH_HOURS = 1      # 漲跌家數
+CACHE_TTL_FUTURES_HOURS = 6      # 期貨(夜盤盤後再更新)
 CACHE_TTL_STOCK_LIST_DAYS = 7    # 股票清單
 
 # 策略最小可用資料天數

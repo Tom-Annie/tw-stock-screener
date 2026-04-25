@@ -428,11 +428,20 @@ def fetch_stock_prices_batch(stock_ids: list, start_date: str,
     """
     all_dfs = []
 
+    # 用「最近交易日」當 cache key 的 asof,確保跨日強制重抓
+    try:
+        from utils.trading_calendar import latest_trading_day
+        asof = latest_trading_day().isoformat()
+        expected_latest = pd.Timestamp(asof)
+    except Exception:
+        asof = datetime.now().strftime("%Y-%m-%d")
+        expected_latest = None
+
     # === Phase 1: 檢查快取 ===
     cached_ids = []
     uncached_ids = []
     for sid in stock_ids:
-        params = {"data_id": sid, "start_date": start_date}
+        params = {"data_id": sid, "start_date": start_date, "asof": asof}
         if end_date:
             params["end_date"] = end_date
         cache_file = _cache_path("TaiwanStockPrice", params)
@@ -440,7 +449,16 @@ def fetch_stock_prices_batch(stock_ids: list, start_date: str,
             mtime = datetime.fromtimestamp(cache_file.stat().st_mtime)
             if datetime.now() - mtime < timedelta(hours=CACHE_TTL_PRICE_HOURS):
                 try:
-                    all_dfs.append(pd.read_parquet(cache_file))
+                    df_cached = pd.read_parquet(cache_file)
+                    # 新鮮度檢查:資料最大日期需 ≥ 最近交易日
+                    if expected_latest is not None and not df_cached.empty and "date" in df_cached.columns:
+                        try:
+                            if pd.to_datetime(df_cached["date"]).max().normalize() < expected_latest.normalize():
+                                uncached_ids.append(sid)
+                                continue
+                        except Exception:
+                            pass
+                    all_dfs.append(df_cached)
                     cached_ids.append(sid)
                     continue
                 except Exception:
@@ -466,7 +484,7 @@ def fetch_stock_prices_batch(stock_ids: list, start_date: str,
             for sid in yf_fetched:
                 try:
                     sid_df = yf_df[yf_df["stock_id"] == sid]
-                    params = {"data_id": sid, "start_date": start_date}
+                    params = {"data_id": sid, "start_date": start_date, "asof": asof}
                     if end_date:
                         params["end_date"] = end_date
                     sid_df.to_parquet(_cache_path("TaiwanStockPrice", params), index=False)
@@ -483,10 +501,11 @@ def fetch_stock_prices_batch(stock_ids: list, start_date: str,
         api_calls = 0
         for sid in uncached_ids:
             try:
-                params = {"data_id": sid, "start_date": start_date}
+                params = {"data_id": sid, "start_date": start_date, "asof": asof}
                 if end_date:
                     params["end_date"] = end_date
-                df = fetch_with_cache("TaiwanStockPrice", params, ttl_hours=18)
+                df = fetch_with_cache("TaiwanStockPrice", params,
+                                       ttl_hours=CACHE_TTL_PRICE_HOURS)
                 if not df.empty:
                     all_dfs.append(df)
                     api_calls += 1

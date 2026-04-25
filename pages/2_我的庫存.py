@@ -253,6 +253,84 @@ if to_delete is not None:
     _save_portfolio(username, portfolio)
     st.rerun()
 
+# ===== 即時損益(TWSE MIS,15-20 秒延遲) =====
+st.markdown("### ⚡ 即時損益")
+live_cols = st.columns([1, 1, 2])
+with live_cols[0]:
+    live_on = st.toggle("啟用即時刷新", value=False, key="live_pnl_on",
+                         help="開啟後每 N 秒自動抓 TWSE MIS 即時報價")
+with live_cols[1]:
+    live_interval = st.selectbox("刷新秒數", [5, 10, 30, 60], index=1,
+                                  key="live_pnl_interval")
+with live_cols[2]:
+    manual_refresh = st.button("🔄 立即刷新", key="live_pnl_manual")
+
+if live_on:
+    try:
+        from streamlit_autorefresh import st_autorefresh
+        st_autorefresh(interval=live_interval * 1000, key="portfolio_live_refresh")
+    except ImportError:
+        st.caption("尚未安裝 streamlit-autorefresh,自動刷新停用")
+
+if live_on or manual_refresh:
+    try:
+        from data.realtime import fetch_mis_quote
+        sids = [h["stock_id"] for h in portfolio]
+        live_df = fetch_mis_quote(sids)
+        if live_df.empty:
+            st.warning("即時報價暫時無回應")
+        else:
+            quote_map = {r["stock_id"]: r for _, r in live_df.iterrows()}
+            rows = []
+            total_cost = 0.0
+            total_value = 0.0
+            for h in portfolio:
+                q = quote_map.get(h["stock_id"])
+                if q is None or q["price"] <= 0:
+                    continue
+                shares = h["shares"]
+                cost = h["avg_cost"]
+                price = q["price"]
+                cost_total = cost * shares
+                value = price * shares
+                pnl = value - cost_total
+                pnl_pct = (pnl / cost_total * 100) if cost_total > 0 else 0
+                total_cost += cost_total
+                total_value += value
+                rows.append({
+                    "代碼": h["stock_id"],
+                    "名稱": q["name"] or h.get("name", ""),
+                    "股數": shares,
+                    "成本": round(cost, 2),
+                    "現價": round(price, 2),
+                    "漲跌%": q["change_pct"],
+                    "市值": round(value, 0),
+                    "未實現損益": round(pnl, 0),
+                    "報酬率%": round(pnl_pct, 2),
+                    "更新時間": q["time"],
+                })
+            if rows:
+                live_table = pd.DataFrame(rows)
+                tot_pnl = total_value - total_cost
+                tot_pct = (tot_pnl / total_cost * 100) if total_cost > 0 else 0
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("總成本", f"{total_cost:,.0f}")
+                m2.metric("總市值", f"{total_value:,.0f}")
+                m3.metric("未實現損益", f"{tot_pnl:+,.0f}",
+                          delta=f"{tot_pct:+.2f}%", delta_color="inverse")
+                m4.metric("更新", datetime.now().strftime("%H:%M:%S"))
+                st.dataframe(
+                    live_table.style.format({
+                        "成本": "{:.2f}", "現價": "{:.2f}",
+                        "漲跌%": "{:+.2f}%", "市值": "{:,.0f}",
+                        "未實現損益": "{:+,.0f}", "報酬率%": "{:+.2f}%",
+                        "股數": "{:,}",
+                    }),
+                    use_container_width=True, hide_index=True,
+                )
+    except Exception as e:
+        st.error(f"即時損益計算失敗:{e}")
+
 # ===== 操作建議邏輯 =====
 def _recommend_action(composite, scores, pnl_pct, avg_cost):
     """根據策略分數和損益給出操作建議"""

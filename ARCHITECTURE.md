@@ -9,10 +9,12 @@ tw-stock-screener/
 │
 ├── pages/
 │   ├── 1_個股分析.py                # 單一個股 8 策略詳細分析 + K線/RSI/MACD 圖表
-│   ├── 2_我的庫存.py                # 庫存管理、損益追蹤、TG/LINE 推播提醒
+│   ├── 2_我的庫存.py                # 庫存管理、損益追蹤、即時損益(MIS)、TG/LINE 推播
 │   ├── 3_回測驗證.py                # 歷史回測策略績效驗證、勝率統計
 │   ├── 4_策略設定.py                # 策略權重、RSI 參數、法人權重調整
-│   └── 5_策略教學.py                # 8 大策略說明文件
+│   ├── 5_策略教學.py                # 8 大策略說明文件
+│   ├── 6_策略監控.py                # 策略歷史表現監控
+│   └── 7_即時看盤.py                # TWSE MIS 即時報價(15-20s 延遲) + 自動刷新
 │
 ├── strategies/                     # 八大評分策略
 │   ├── base.py                     # BaseStrategy 抽象基類（score/details/_clamp）
@@ -30,14 +32,15 @@ tw-stock-screener/
 │
 ├── data/                            # 資料層：Parquet 快取 → yfinance → FinMind
 │   ├── fetcher.py                   # façade，re-export 8 個子模組保持 import 相容
-│   ├── cache.py                     # Parquet 快取底層（_cache_path / fetch_with_cache）
+│   ├── cache.py                     # Parquet 快取底層（_cache_path / fetch_with_cache + 新鮮度檢查）
 │   ├── finmind.py                   # FinMind API 基礎 + quota 監控
-│   ├── prices.py                    # 價量（TWSE / TPEx JSON + yfinance 批次）
+│   ├── prices.py                    # 價量（TWSE / TPEx JSON + yfinance 批次，cache key 含 asof）
 │   ├── institutional.py             # 三大法人買賣超
 │   ├── margin.py                    # 融資融券
 │   ├── index.py                     # TAIEX / 櫃買指數 / 漲跌家數廣度
 │   ├── us_market.py                 # 費半 / TSM / 夜盤/日盤期貨 / 美元台幣
 │   ├── stock_info.py                # 股票清單 / 名稱查詢 / TDCC 集保
+│   ├── realtime.py                  # TWSE MIS 即時報價(15-20s 延遲，免費)
 │   └── __init__.py
 │
 ├── utils/
@@ -48,10 +51,12 @@ tw-stock-screener/
 │   ├── auth.py                     # 密碼保護（APP_PASSWORD / APP_PASSWORDS）
 │   ├── gist_store.py               # GitHub Gist 庫存持久化
 │   ├── theme.py                    # 科技風格 UI 主題（自訂 CSS 注入）
+│   ├── trading_calendar.py         # 台股交易日曆（最近交易日/盤中判定/yfinance 反查）
 │   └── __init__.py
 │
 ├── config/
 │   ├── settings.py                 # 全域設定（權重、參數、閾值、FINMIND_TOKEN）
+│   ├── tw_holidays.json            # 台股休市日（每年 12 月底更新次年）
 │   └── __init__.py
 │
 ├── scripts/
@@ -240,6 +245,37 @@ conhost.exe --headless wsl.exe -e bash -c "python3 /mnt/c/Users/User/tw-stock-sc
 | 溫和 | ≥15% | 均衡配置 |
 | 偏冷 | ≥5% | 偏價值（法人+技術+融資） |
 | 極冷 | <5% | 關注外資動向（法人+融資+美股） |
+
+## 資料新鮮度策略(避免顯示舊資料)
+
+**雙保險機制**:
+
+1. **mtime + TTL**(`data/cache.py`):快取檔超過 `CACHE_TTL_PRICE_HOURS`(預設 3 小時)直接判失效
+2. **資料截止日檢查**(`_is_data_fresh`):若 cache 內 `date` 欄最大值 < 「最近交易日」(由 `utils/trading_calendar.latest_trading_day()` 計算),也判失效
+
+**Cache key 加 asof**(`data/prices.py`):`fetch_stock_prices_batch` 將「最近交易日」放進 cache key,確保每天首次呼叫一定是新 key,跨日不會誤命中。
+
+**主頁強制刷新按鈕**(`app.py`):一鍵清掉 TaiwanStockPrice / Institutional / Margin / breadth / taiex 等 parquet + `st.cache_data.clear()`。
+
+## 即時資料層(`data/realtime.py`)
+
+**TWSE MIS API**:`https://mis.twse.com.tw/stock/api/getStockInfo.jsp`
+- 完全免費、無需 token
+- 延遲 ~15-20 秒
+- 同時送 `tse_xxx.tw|otc_xxx.tw` 一次取上市/上櫃
+- 提供:現價、開高低、昨收、漲跌、成交量、五檔買賣、成交時間
+- 也支援大盤指數(`t00`=加權、`o00`=櫃買)
+
+**使用場景**:
+| 頁面 | 用途 |
+|------|------|
+| `pages/7_即時看盤.py` | 多檔報價卡片牆 + 自動刷新(3-60 秒) |
+| `pages/2_我的庫存.py` | 「即時損益」區塊,顯示總市值/未實現損益/個股漲跌 |
+
+**注意事項**:
+- TWSE MIS 對單 IP 有頻率上限,建議刷新 ≥5 秒
+- 多人同時看 = 多倍呼叫,Streamlit Cloud 上要小心
+- 盤後仍會回傳「最後一筆撮合」,用 `is_trading_now()` 判斷盤中/盤後
 
 ## 特殊設計備註
 

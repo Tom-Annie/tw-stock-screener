@@ -121,6 +121,50 @@ st.sidebar.caption("資料來源：FinMind / 台灣證交所")
 st.title("🇹🇼 台股智慧選股系統")
 st.markdown("結合 **八大策略** 的綜合選股平台（突破均線/量價齊揚/相對強弱/法人籌碼/技術綜合/融資融券/美股連動/大戶籌碼）")
 
+# ===== 資料新鮮度徽章 + 強制刷新 =====
+try:
+    from utils.trading_calendar import latest_trading_day, is_trading_now
+    _td = latest_trading_day()
+    _now = datetime.now()
+    _status = "🟢 盤中" if is_trading_now() else "⚪ 盤後"
+    badge_l, badge_r = st.columns([4, 1])
+    with badge_l:
+        st.caption(
+            f"{_status} ｜ 最近交易日:**{_td.isoformat()}** ｜ "
+            f"頁面刷新時間:{_now.strftime('%Y-%m-%d %H:%M:%S')} ｜ "
+            f"新增「📡 即時看盤」頁面(15-20 秒延遲)"
+        )
+    with badge_r:
+        if st.button("🔄 強制重抓資料", help="清除所有快取並重新抓取最新資料"):
+            try:
+                st.cache_data.clear()
+            except Exception:
+                pass
+            try:
+                from config.settings import CACHE_DIR
+                cleared = 0
+                for p in CACHE_DIR.glob("TaiwanStockPrice_*.parquet"):
+                    p.unlink(missing_ok=True)
+                    cleared += 1
+                for p in CACHE_DIR.glob("TaiwanStockInstitutional*.parquet"):
+                    p.unlink(missing_ok=True)
+                    cleared += 1
+                for p in CACHE_DIR.glob("TaiwanStockMargin*.parquet"):
+                    p.unlink(missing_ok=True)
+                    cleared += 1
+                for p in CACHE_DIR.glob("breadth_*.parquet"):
+                    p.unlink(missing_ok=True)
+                    cleared += 1
+                for p in CACHE_DIR.glob("taiex_*.parquet"):
+                    p.unlink(missing_ok=True)
+                    cleared += 1
+                st.success(f"已清除 {cleared} 個快取檔,請重新分析")
+            except Exception as e:
+                st.error(f"清除快取失敗:{e}")
+            st.rerun()
+except Exception:
+    pass
+
 # ===== 大盤概況 =====
 with st.expander("📈 大盤概況", expanded=False):
     @st.cache_data(ttl=300, show_spinner=False)
