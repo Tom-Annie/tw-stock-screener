@@ -319,15 +319,41 @@ if live_on or manual_refresh:
                 m3.metric("未實現損益", f"{tot_pnl:+,.0f}",
                           delta=f"{tot_pct:+.2f}%", delta_color="inverse")
                 m4.metric("更新", datetime.now().strftime("%H:%M:%S"))
-                st.dataframe(
-                    live_table.style.format({
-                        "成本": "{:.2f}", "現價": "{:.2f}",
-                        "漲跌%": "{:+.2f}%", "市值": "{:,.0f}",
-                        "未實現損益": "{:+,.0f}", "報酬率%": "{:+.2f}%",
-                        "股數": "{:,}",
-                    }),
-                    use_container_width=True, hide_index=True,
-                )
+
+                try:
+                    from st_aggrid import AgGrid, GridOptionsBuilder, JsCode
+                    gb = GridOptionsBuilder.from_dataframe(live_table)
+                    gb.configure_default_column(resizable=True, sortable=True,
+                                                  cellStyle={"fontSize": "13px"})
+                    gb.configure_column("代碼", pinned="left", width=80)
+                    gb.configure_column("名稱", pinned="left", width=120)
+                    color_js = JsCode("""
+                    function(params){
+                      const v = params.value;
+                      if (v > 0) return {'color':'#ff4d4f','fontWeight':'bold'};
+                      if (v < 0) return {'color':'#10b981','fontWeight':'bold'};
+                      return {'color':'#888'};
+                    }
+                    """)
+                    for col in ["漲跌%", "未實現損益", "報酬率%"]:
+                        gb.configure_column(col, cellStyle=color_js)
+                    gb.configure_grid_options(domLayout="autoHeight")
+                    AgGrid(
+                        live_table, gridOptions=gb.build(),
+                        allow_unsafe_jscode=True, theme="alpine-dark",
+                        update_mode="NO_UPDATE",
+                        height=min(60 + 35 * len(live_table), 500),
+                    )
+                except ImportError:
+                    st.dataframe(
+                        live_table.style.format({
+                            "成本": "{:.2f}", "現價": "{:.2f}",
+                            "漲跌%": "{:+.2f}%", "市值": "{:,.0f}",
+                            "未實現損益": "{:+,.0f}", "報酬率%": "{:+.2f}%",
+                            "股數": "{:,}",
+                        }),
+                        use_container_width=True, hide_index=True,
+                    )
     except Exception as e:
         st.error(f"即時損益計算失敗:{e}")
 

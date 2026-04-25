@@ -277,6 +277,18 @@ conhost.exe --headless wsl.exe -e bash -c "python3 /mnt/c/Users/User/tw-stock-sc
 - 多人同時看 = 多倍呼叫,Streamlit Cloud 上要小心
 - 盤後仍會回傳「最後一筆撮合」,用 `is_trading_now()` 判斷盤中/盤後
 
+## 排版增強套件(2026-04 引入)
+
+| 套件 | 用途 | 使用頁面 |
+|------|------|----------|
+| `streamlit-elements` | 可拖拉/resize 的 dashboard grid(MUI) | `pages/7_即時看盤.py`「可拖拉」模式 |
+| `streamlit-aggrid` | 凍結欄位、排序、條件式變色的高階表格 | `pages/7_即時看盤.py` 詳細表、`pages/2_我的庫存.py` 即時損益表 |
+| `streamlit-extras` | tagger / badge 等小元件 | `app.py` 主頁狀態徽章 |
+| `streamlit-autorefresh` | 全頁自動刷新(fragment 不可用時的 fallback) | `pages/7_即時看盤.py`、`pages/2_我的庫存.py` |
+| `st.fragment(run_every=N)` | Streamlit ≥1.33 內建,局部刷新避免整頁重畫 | `pages/7_即時看盤.py` 主資料區塊 |
+
+**降級策略**:每個 import 都用 try/except,缺套件時自動 fallback 到原始 `st.dataframe` / 純 columns 排版,部署環境有缺裝也不會壞。
+
 ## 特殊設計備註
 
 - `daily_scan.py` 直接用 `requests.post` 發 Telegram，不用 `utils/telegram_notify`，因為 GitHub Actions 沒有 `st.secrets`

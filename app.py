@@ -126,14 +126,38 @@ try:
     from utils.trading_calendar import latest_trading_day, is_trading_now
     _td = latest_trading_day()
     _now = datetime.now()
-    _status = "🟢 盤中" if is_trading_now() else "⚪ 盤後"
+    _trading = is_trading_now()
+
+    # 嘗試用 streamlit-extras 的 tags 樣式,失敗 fallback 純文字
+    try:
+        from streamlit_extras.tags import tagger_component
+        _has_tags = True
+    except Exception:
+        _has_tags = False
+
     badge_l, badge_r = st.columns([4, 1])
     with badge_l:
-        st.caption(
-            f"{_status} ｜ 最近交易日:**{_td.isoformat()}** ｜ "
-            f"頁面刷新時間:{_now.strftime('%Y-%m-%d %H:%M:%S')} ｜ "
-            f"新增「📡 即時看盤」頁面(15-20 秒延遲)"
-        )
+        if _has_tags:
+            tagger_component(
+                "資料狀態",
+                [
+                    ("盤中" if _trading else "盤後/休市"),
+                    f"最近交易日 {_td.isoformat()}",
+                    f"刷新 {_now.strftime('%H:%M:%S')}",
+                    "📡 即時看盤已上線",
+                ],
+                color_name=[
+                    "green" if _trading else "lightgrey",
+                    "blue", "violet", "orange",
+                ],
+            )
+        else:
+            _status = "🟢 盤中" if _trading else "⚪ 盤後"
+            st.caption(
+                f"{_status} ｜ 最近交易日:**{_td.isoformat()}** ｜ "
+                f"頁面刷新:{_now.strftime('%Y-%m-%d %H:%M:%S')} ｜ "
+                f"📡 即時看盤已上線"
+            )
     with badge_r:
         if st.button("🔄 強制重抓資料", help="清除所有快取並重新抓取最新資料"):
             try:
