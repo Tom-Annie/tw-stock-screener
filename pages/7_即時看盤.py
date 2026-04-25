@@ -42,26 +42,35 @@ except ImportError:
 
 st.title("📡 即時看盤")
 
-# ===== 控制列 =====
+# ===== 控制列(注意:key= 與 index=/value= 共用會在多頁切換時 reset,
+# 統一改成「session_state 預設值 + 純 key=」模式) =====
+_DEFAULT_LIST = "2330,2454,2317,2412,3008,2382,2308,1301,1303,2891"
+_REFRESH_OPTIONS = [3, 5, 10, 30, 60]
+_LAYOUT_OPTIONS = ["可拖拉", "經典"]
+
+# 種預設(只在 key 不存在時)
+if "live_watchlist" not in st.session_state:
+    st.session_state["live_watchlist"] = _DEFAULT_LIST
+if "live_refresh_sec" not in st.session_state:
+    st.session_state["live_refresh_sec"] = 5
+if "live_auto_on" not in st.session_state:
+    st.session_state["live_auto_on"] = True
+if "live_layout_mode" not in st.session_state or \
+        st.session_state["live_layout_mode"] not in _LAYOUT_OPTIONS:
+    st.session_state["live_layout_mode"] = "可拖拉" if HAS_ELEMENTS else "經典"
+
 ctl_l, ctl_m, ctl_r, ctl_x = st.columns([3, 1, 1, 1])
 with ctl_l:
-    default_list = "2330,2454,2317,2412,3008,2382,2308,1301,1303,2891"
-    raw = st.text_input(
-        "監控股票代碼(逗號分隔)",
-        value=st.session_state.get("live_watchlist", default_list),
-        key="live_watchlist_input",
-    )
-    st.session_state["live_watchlist"] = raw
+    raw = st.text_input("監控股票代碼(逗號分隔)", key="live_watchlist")
 with ctl_m:
     refresh_sec = st.selectbox(
-        "刷新秒數", [3, 5, 10, 30, 60], index=1, key="live_refresh_sec"
+        "刷新秒數", _REFRESH_OPTIONS, key="live_refresh_sec"
     )
 with ctl_r:
-    auto = st.toggle("自動刷新", value=True, key="live_auto_on")
+    auto = st.toggle("自動刷新", key="live_auto_on")
 with ctl_x:
     layout_mode = st.radio(
-        "排版", ["可拖拉", "經典"], horizontal=True,
-        index=0 if HAS_ELEMENTS else 1, key="live_layout_mode",
+        "排版", _LAYOUT_OPTIONS, horizontal=True, key="live_layout_mode",
     )
 
 stock_ids = [s.strip() for s in raw.split(",") if s.strip()]

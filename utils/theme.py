@@ -12,21 +12,23 @@ def _get_current_theme() -> str:
 
 
 def render_theme_selector():
-    """在 sidebar 渲染主題切換器（radio）"""
-    current = _get_current_theme()
+    """在 sidebar 渲染主題切換器（radio）
+
+    重要:同時使用 `key=` 和 `index=` 是 Streamlit 多頁應用的陷阱
+    — 換頁後 `index` 會覆蓋 session_state,造成主題重置。
+    正確做法:先用 `if key not in session_state` 補預設值,
+    然後 widget 只用 `key=`,讓 session_state 當唯一真實來源。
+    """
     options = list(_THEMES.keys())
-    try:
-        idx = options.index(current)
-    except ValueError:
-        idx = 0
-    choice = st.sidebar.radio(
+    if "ui_theme" not in st.session_state or \
+            st.session_state["ui_theme"] not in options:
+        st.session_state["ui_theme"] = _DEFAULT_THEME
+    return st.sidebar.radio(
         "🎨 介面風格",
         options=options,
-        index=idx,
         horizontal=True,
         key="ui_theme",
     )
-    return choice
 
 
 def inject_custom_css():
