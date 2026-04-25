@@ -255,18 +255,24 @@ if to_delete is not None:
 
 # ===== 即時損益(TWSE MIS,15-20 秒延遲) =====
 st.markdown("### ⚡ 即時損益")
+from utils.persist import persist_state, make_persist_callback
+
+persist_state("live_pnl_on", default=False)
+persist_state("live_pnl_interval", default=10)
+
 live_cols = st.columns([1, 1, 2])
-# 預設值只在 key 不存在時種(避免換頁 reset)
-if "live_pnl_on" not in st.session_state:
-    st.session_state["live_pnl_on"] = False
-if "live_pnl_interval" not in st.session_state:
-    st.session_state["live_pnl_interval"] = 10
 with live_cols[0]:
-    live_on = st.toggle("啟用即時刷新", key="live_pnl_on",
-                         help="開啟後每 N 秒自動抓 TWSE MIS 即時報價")
+    live_on = st.toggle(
+        "啟用即時刷新", key="live_pnl_on",
+        on_change=make_persist_callback("live_pnl_on"),
+        help="開啟後每 N 秒自動抓 TWSE MIS 即時報價",
+    )
 with live_cols[1]:
-    live_interval = st.selectbox("刷新秒數", [5, 10, 30, 60],
-                                  key="live_pnl_interval")
+    live_interval = st.selectbox(
+        "刷新秒數", [5, 10, 30, 60],
+        key="live_pnl_interval",
+        on_change=make_persist_callback("live_pnl_interval"),
+    )
 with live_cols[2]:
     manual_refresh = st.button("🔄 立即刷新", key="live_pnl_manual")
 

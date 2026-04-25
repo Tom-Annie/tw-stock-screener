@@ -6,28 +6,45 @@ import streamlit as st
 
 _DEFAULT_THEME = "科技"
 
+# Bulletproof 跨頁狀態保存:
+#   _PERSIST_KEY 是一般 session_state key,Streamlit 不會在 cross-page
+#   時清除;_WIDGET_KEY 是 radio widget 綁的 key(每頁都會重新建立)。
+#   渲染前 persist → widget,on_change 時 widget → persist。
+_PERSIST_KEY = "ui_theme_value"
+_WIDGET_KEY = "ui_theme"
+
 
 def _get_current_theme() -> str:
-    return st.session_state.get("ui_theme", _DEFAULT_THEME)
+    """取目前主題,以 persist key 為準"""
+    return st.session_state.get(_PERSIST_KEY, _DEFAULT_THEME)
+
+
+def _on_theme_change():
+    """widget 改變時,把值寫回 persist key"""
+    if _WIDGET_KEY in st.session_state:
+        st.session_state[_PERSIST_KEY] = st.session_state[_WIDGET_KEY]
 
 
 def render_theme_selector():
-    """在 sidebar 渲染主題切換器（radio）
-
-    重要:同時使用 `key=` 和 `index=` 是 Streamlit 多頁應用的陷阱
-    — 換頁後 `index` 會覆蓋 session_state,造成主題重置。
-    正確做法:先用 `if key not in session_state` 補預設值,
-    然後 widget 只用 `key=`,讓 session_state 當唯一真實來源。
-    """
+    """在 sidebar 渲染主題切換器(radio),跨頁保持狀態。"""
     options = list(_THEMES.keys())
-    if "ui_theme" not in st.session_state or \
-            st.session_state["ui_theme"] not in options:
-        st.session_state["ui_theme"] = _DEFAULT_THEME
+
+    # 1. 確保 persist 有合法值
+    cur = st.session_state.get(_PERSIST_KEY, _DEFAULT_THEME)
+    if cur not in options:
+        cur = _DEFAULT_THEME
+    st.session_state[_PERSIST_KEY] = cur
+
+    # 2. 換頁時把 persist 複製給 widget key(widget key 可能被清掉)
+    st.session_state[_WIDGET_KEY] = cur
+
+    # 3. 渲染 widget,on_change 把值寫回 persist
     return st.sidebar.radio(
         "🎨 介面風格",
         options=options,
         horizontal=True,
-        key="ui_theme",
+        key=_WIDGET_KEY,
+        on_change=_on_theme_change,
     )
 
 
